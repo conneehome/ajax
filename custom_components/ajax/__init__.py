@@ -1,5 +1,5 @@
 """
-Connee Enterprise - Ajax Systems Integration for Home Assistant
+Ajax Systems Integration for Home Assistant
 Custom Component per HACS
 
 Repository: https://github.com/conneehome/ajax
@@ -13,7 +13,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_CONNEE_TOKEN
+from .const import DOMAIN
 from .coordinator import AjaxDataCoordinator
 from .api import AjaxApiClient
 
@@ -31,10 +31,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         session=session,
         email=entry.data["email"],
         password=entry.data["password"],
-        connee_token=entry.data.get(CONF_CONNEE_TOKEN, ""),
     )
     
-    # Login
+    # Login to Ajax API
     if not await api.login():
         _LOGGER.error("Failed to login to Ajax API")
         return False

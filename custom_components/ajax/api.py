@@ -21,13 +21,11 @@ class AjaxApiClient:
         session: ClientSession,
         email: str,
         password: str,
-        connee_token: str = "",
     ):
         """Initialize the API client."""
         self.session = session
         self.email = email
         self.password = password
-        self.connee_token = connee_token
         self.session_token: Optional[str] = None
         self.user_id: Optional[str] = None
         self.hub_id: Optional[str] = None
@@ -56,9 +54,6 @@ class AjaxApiClient:
             "Accept": "application/json",
             "X-Api-Key": API_KEY,
         }
-
-        # NOTE: connee_token is only for Connee API validation, NOT for Ajax API
-        # Do NOT send it to Ajax API
 
         if use_token and self.session_token:
             headers["X-Session-Token"] = self.session_token

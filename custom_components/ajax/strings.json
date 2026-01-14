@@ -3,9 +3,8 @@
     "step": {
       "user": {
         "title": "Connetti Ajax Systems",
-        "description": "Inserisci le tue credenziali Ajax e il token Connee per l'autorizzazione.\n\n**Token Connee**: Puoi ottenerlo dall'app Connee Enterprise. È necessario per autorizzare l'uso di questa integrazione.",
+        "description": "Inserisci le tue credenziali Ajax per connettere il sistema.",
         "data": {
-          "connee_token": "Token Connee",
           "email": "Email Ajax",
           "password": "Password Ajax"
         }
@@ -20,8 +19,7 @@
     },
     "error": {
       "invalid_auth": "Credenziali non valide",
-      "no_hubs": "Nessun hub trovato nel tuo account",
-      "invalid_connee_token": "Token Connee non valido o mancante"
+      "no_hubs": "Nessun hub trovato nel tuo account"
     }
   }
 }

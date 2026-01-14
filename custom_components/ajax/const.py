@@ -3,7 +3,6 @@ DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems"
 
 # Config
-CONF_CONNEE_TOKEN = "connee_token"
 CONF_HUB_ID = "hub_id"
 CONF_POLLING_INTERVAL = "polling_interval"
 
@@ -11,10 +10,7 @@ CONF_POLLING_INTERVAL = "polling_interval"
 DEFAULT_POLLING_INTERVAL = 5
 DEFAULT_SCAN_INTERVAL = 30
 
-# Connee API for token validation
-CONNEE_API_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/validate-connee-token"
-
-# API
+# API - Ajax Systems official API
 AJAX_API_BASE = "https://api.ajax.systems/api"
 API_KEY = "faeb7e1d9bc74bbe9939e5178a0222d2"
 TOKEN_REFRESH_INTERVAL = 600
@@ -57,31 +53,3 @@ DEVICE_CLASS_MAP = {
     "FireProtect": "smoke",
     "FireProtectPlus": "smoke",
 }
-
-
-async def validate_connee_token(session, token: str, email: str) -> bool:
-    """Validate a Connee token by calling the Connee API."""
-    import logging
-    _LOGGER = logging.getLogger(__name__)
-    
-    try:
-        async with session.post(
-            CONNEE_API_URL,
-            json={"token": token, "email": email},
-            headers={"Content-Type": "application/json"},
-            timeout=10
-        ) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data.get("valid"):
-                    _LOGGER.info("Connee token validated successfully")
-                    return True
-                else:
-                    _LOGGER.warning("Connee token invalid: %s", data.get("error", "unknown"))
-                    return False
-            else:
-                _LOGGER.error("Connee API error: %s", resp.status)
-                return False
-    except Exception as e:
-        _LOGGER.error("Error validating Connee token: %s", e)
-        return False
