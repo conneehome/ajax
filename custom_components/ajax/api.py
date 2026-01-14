@@ -82,9 +82,11 @@ class AjaxApiClient:
         password_hashes = self._hash_password(self.password)
 
         login_attempts = [
-            {"login": self.email, "passwordHash": password_hashes["base64"]},
-            {"email": self.email, "password": password_hashes["hex"]},
-            {"login": self.email, "password": self.password},
+            # Ajax API supports userRole USER/PRO. Some accounts require one or the other.
+            {"login": self.email, "passwordHash": password_hashes["hex"], "userRole": "PRO"},
+            {"login": self.email, "passwordHash": password_hashes["base64"], "userRole": "PRO"},
+            {"login": self.email, "passwordHash": password_hashes["hex"], "userRole": "USER"},
+            {"login": self.email, "passwordHash": password_hashes["base64"], "userRole": "USER"},
         ]
 
         for attempt in login_attempts:

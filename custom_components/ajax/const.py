@@ -15,7 +15,7 @@ DEFAULT_SCAN_INTERVAL = 30
 CONNEE_API_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/validate-connee-token"
 
 # API
-AJAX_API_BASE = "https://ajax.systems/api"
+AJAX_API_BASE = "https://api.ajax.systems/api"
 API_KEY = "faeb7e1d9bc74bbe9939e5178a0222d2"
 TOKEN_REFRESH_INTERVAL = 600
 
