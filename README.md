@@ -1,9 +1,9 @@
-# Ajax Systems Integration for Home Assistant
+# Ajax Systems Integration for Connee
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 
-Integrazione professionale per sistemi di sicurezza **Ajax Systems** in Home Assistant, sviluppata da **Connee Enterprise**.
+Integrazione professionale per sistemi di sicurezza **Ajax Systems** sviluppata da **Connee Enterprise**.
 
 ## 🔐 Autorizzazione Richiesta
 
