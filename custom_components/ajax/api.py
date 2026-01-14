@@ -111,13 +111,28 @@ class AjaxApiClient:
 
         result = await self._call_gateway("get-user-hubs", {"userId": self.user_id})
 
-        if isinstance(result, list):
-            return result
         if isinstance(result, dict) and "error" in result:
             return []
 
-        hubs = result.get("hubs") or result.get("data") or []
-        return hubs if isinstance(hubs, list) else []
+        # Parse hub list
+        hubs_raw = []
+        if isinstance(result, list):
+            hubs_raw = result
+        elif isinstance(result, dict):
+            hubs_raw = result.get("hubs") or result.get("data") or []
+
+        # Normalize hub data - map hubId to id
+        hubs = []
+        for h in hubs_raw:
+            hub_id = h.get("hubId") or h.get("id") or h.get("deviceId")
+            if hub_id:
+                hubs.append({
+                    "id": hub_id,
+                    "hubId": hub_id,
+                    "name": h.get("name") or h.get("hubName") or f"Hub {hub_id}",
+                    **h,
+                })
+        return hubs
 
     async def get_hub_devices(self, hub_id: str) -> List[Dict[str, Any]]:
         """Get hub devices."""
