@@ -59,6 +59,18 @@ class AjaxAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         self._attr_manufacturer = MANUFACTURER
 
     @property
+    def code_format(self) -> str | None:
+        return None
+
+    @property
+    def code_arm_required(self) -> bool:
+        return False
+
+    @property
+    def code_required(self) -> bool:
+        return False
+
+    @property
     def state(self) -> str:
         """Return current state."""
         hub_state = self.coordinator.data.get("hub_state", {})

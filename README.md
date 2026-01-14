@@ -1,7 +1,7 @@
 # Connee Enterprise - Private Ajax Systems Integration
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)
 
 **Use only for Connee** - Integrazione privata per sistemi di sicurezza Ajax Systems.
 
