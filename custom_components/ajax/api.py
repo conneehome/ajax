@@ -57,13 +57,11 @@ class AjaxApiClient:
             "X-Api-Key": API_KEY,
         }
 
-        # Add Connee token for authorization
-        if self.connee_token:
-            headers["X-Connee-Token"] = self.connee_token
+        # NOTE: connee_token is only for Connee API validation, NOT for Ajax API
+        # Do NOT send it to Ajax API
 
         if use_token and self.session_token:
             headers["X-Session-Token"] = self.session_token
-
         try:
             timeout = ClientTimeout(total=30)
             async with self.session.request(
