@@ -1,9 +1,9 @@
-# Ajax Systems Integration for Connee
+# Connee Enterprise - Private Ajax Systems Integration
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 
-Integrazione professionale per sistemi di sicurezza **Ajax Systems** sviluppata da **Connee Enterprise**.
+**Use only for Connee** - Integrazione privata per sistemi di sicurezza Ajax Systems.
 
 ## 🔐 Autorizzazione Richiesta
 

@@ -9,7 +9,7 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, CONF_CONNEE_TOKEN, CONF_HUB_ID
+from .const import DOMAIN, CONF_CONNEE_TOKEN, CONF_HUB_ID, validate_connee_token, hash_token_sha256
 from .api import AjaxApiClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._email: Optional[str] = None
         self._password: Optional[str] = None
         self._connee_token: Optional[str] = None
+        self._connee_token_hash: Optional[str] = None
         self._hubs: list = []
 
     async def async_step_user(
@@ -44,19 +45,23 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._email = user_input[CONF_EMAIL]
             self._password = user_input[CONF_PASSWORD]
-            self._connee_token = user_input[CONF_CONNEE_TOKEN]
+            self._connee_token = user_input[CONF_CONNEE_TOKEN].strip()
 
-            # Validate Connee token
-            if not self._connee_token or len(self._connee_token) < 10:
+            # Validate Connee token using SHA256 hash comparison
+            if not validate_connee_token(self._connee_token):
                 errors["base"] = "invalid_connee_token"
+                _LOGGER.warning("Invalid Connee token provided")
             else:
+                # Store the SHA256 hash of the token (not plaintext)
+                self._connee_token_hash = hash_token_sha256(self._connee_token)
+                
                 # Try to login
                 session = async_get_clientsession(self.hass)
                 api = AjaxApiClient(
                     session=session,
                     email=self._email,
                     password=self._password,
-                    connee_token=self._connee_token,
+                    connee_token=self._connee_token_hash,  # Use hashed token
                 )
 
                 if await api.login():
@@ -70,7 +75,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 data={
                                     CONF_EMAIL: self._email,
                                     CONF_PASSWORD: self._password,
-                                    CONF_CONNEE_TOKEN: self._connee_token,
+                                    CONF_CONNEE_TOKEN: self._connee_token_hash,  # Store SHA256 hash
                                     CONF_HUB_ID: hub.get("id"),
                                 },
                             )
@@ -104,7 +109,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data={
                     CONF_EMAIL: self._email,
                     CONF_PASSWORD: self._password,
-                    CONF_CONNEE_TOKEN: self._connee_token,
+                    CONF_CONNEE_TOKEN: self._connee_token_hash,  # Store SHA256 hash
                     CONF_HUB_ID: hub_id,
                 },
             )
