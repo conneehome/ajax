@@ -1,6 +1,4 @@
 """Constants for Ajax integration."""
-import hashlib
-
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems"
 
@@ -13,10 +11,8 @@ CONF_POLLING_INTERVAL = "polling_interval"
 DEFAULT_POLLING_INTERVAL = 5
 DEFAULT_SCAN_INTERVAL = 30
 
-# Valid Connee Token SHA256 Hash (for validation)
-# This is the SHA256 hash of the valid Connee token
-# Token: itE4C2xshQiqQWuzwR9cYSfrEad57fAqrefjTJ9V8KS6jzgxUIK6m65KecK8clha...
-VALID_CONNEE_TOKEN_HASH = "7a4b8d2e1c5f9a3b6e8d4c7f2a9b5e1d8c4a7f3b6e2d9c5a8f1b4e7d3c6a9f2b5"
+# Valid Connee Token for validation
+VALID_CONNEE_TOKEN = "itE4C2xshQiqQWuzwR9cYSfrEad57fAqrefjTJ9V8KS6jzgxUIK6m65KecK8clha1K4yS4FZ7wVpKQRA6sBH4vAGLUEUgSF5SXggPqvU08kRcmtIoXDx3TwiQ4VWqaO6kqzOiv1KBoWycsT7UDJxqa8GUVaQYZMHDRc1XzMjEJJvwZWWOTCK5oBZjYVF8TS4jQ56PpvY065l91puduQvsRPjfjOjpPCXUtOW4UVuDwC3XvoxGP4W01oUdSMifc1pPSGf0DB1zFkwYJXhse38Mpq2q7AJwTUkzvxuzeYbwTFjP5QlUuMYE1ePaM6umYa0Fu7VegF05aaE3walUETBYIqiHTHisdsOX6E31mOX50xQ9b0APQYvzyG9dDTYKyyKURFXAhs9s8SbGq1FMtqtFB5sgtCqqjzfOMTKbI3rWj3UpaYLEx0Xw4fyY5Rek9IoY38q85rUrbEbfbO2jlYqdrJPg1tzX7yirLMT93pFWI9eTRhEjqDPmsIjXjFMlhjW"
 
 # API
 AJAX_API_BASE = "https://ajax.systems/api"
@@ -63,12 +59,6 @@ DEVICE_CLASS_MAP = {
 }
 
 
-def hash_token_sha256(token: str) -> str:
-    """Hash a token using SHA256."""
-    return hashlib.sha256(token.encode('utf-8')).hexdigest()
-
-
 def validate_connee_token(token: str) -> bool:
-    """Validate a Connee token by comparing its SHA256 hash."""
-    token_hash = hash_token_sha256(token.strip())
-    return token_hash == VALID_CONNEE_TOKEN_HASH
+    """Validate a Connee token by direct comparison."""
+    return token.strip() == VALID_CONNEE_TOKEN
