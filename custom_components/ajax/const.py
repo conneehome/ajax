@@ -8,7 +8,7 @@ CONF_POLLING_INTERVAL = "polling_interval"
 
 # Defaults
 DEFAULT_POLLING_INTERVAL = 5
-DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_SCAN_INTERVAL = 10
 
 # API - Connee Gateway (proxies to Ajax with authorization check)
 CONNEE_GATEWAY_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/ajax-api"

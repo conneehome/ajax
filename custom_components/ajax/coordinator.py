@@ -26,6 +26,7 @@ class AjaxDataCoordinator(DataUpdateCoordinator):
         )
         self.api = api
         self.hub_id = hub_id
+        
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from API."""

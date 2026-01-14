@@ -194,3 +194,4 @@ class AjaxApiClient:
             "armState": arm_state,
         })
         return "error" not in result
+
