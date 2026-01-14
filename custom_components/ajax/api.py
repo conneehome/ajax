@@ -32,7 +32,7 @@ class AjaxApiClient:
         self,
         action: str,
         body: Optional[Dict] = None,
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Call Connee Gateway API."""
         url = f"{CONNEE_GATEWAY_URL}?action={action}"
         headers = {
@@ -50,24 +50,33 @@ class AjaxApiClient:
                 "POST", url, json=request_body, headers=headers, timeout=timeout
             ) as resp:
                 result = await resp.json()
-                if resp.status == 200 and result.get("success"):
-                    return result.get("data", result)
-                else:
+
+                if resp.status == 200 and isinstance(result, dict) and result.get("success"):
+                    # Return the actual payload (can be dict or list)
+                    return result.get("data")
+
+                if isinstance(result, dict):
                     error_msg = result.get("error", f"HTTP {resp.status}")
-                    _LOGGER.error("Gateway error: %s", error_msg)
-                    return {"error": resp.status, "message": error_msg}
+                else:
+                    error_msg = f"HTTP {resp.status}"
+
+                _LOGGER.error("Gateway error: %s", error_msg)
+                return {"error": resp.status, "message": error_msg}
         except Exception as e:
             _LOGGER.error("Gateway request error: %s", e)
             return {"error": -1, "message": str(e)}
 
     async def login(self) -> bool:
         """Login via Connee Gateway."""
-        result = await self._call_gateway("login", {
-            "email": self.email,
-            "password": self.password,
-        })
+        result = await self._call_gateway(
+            "login",
+            {
+                "email": self.email,
+                "password": self.password,
+            },
+        )
 
-        if "error" not in result:
+        if isinstance(result, dict) and "error" not in result:
             self.session_token = (
                 result.get("sessionToken")
                 or result.get("token")
@@ -87,7 +96,7 @@ class AjaxApiClient:
                 _LOGGER.info("Login successful via Connee Gateway")
                 return True
 
-        error_msg = result.get("message", "Login failed")
+        error_msg = result.get("message", "Login failed") if isinstance(result, dict) else "Login failed"
         _LOGGER.error("Login failed: %s", error_msg)
         return False
 
@@ -99,36 +108,54 @@ class AjaxApiClient:
         """Get user hubs."""
         if not self.user_id:
             return []
+
         result = await self._call_gateway("get-user-hubs", {"userId": self.user_id})
-        if "error" in result:
+
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "error" in result:
             return []
-        hubs = result.get("data", result.get("hubs", result if isinstance(result, list) else []))
+
+        hubs = result.get("hubs") or result.get("data") or []
         return hubs if isinstance(hubs, list) else []
 
     async def get_hub_devices(self, hub_id: str) -> List[Dict[str, Any]]:
         """Get hub devices."""
         if not self.user_id:
             return []
-        result = await self._call_gateway("get-hub-devices", {
-            "userId": self.user_id,
-            "hubId": hub_id,
-        })
-        if "error" in result:
+
+        result = await self._call_gateway(
+            "get-hub-devices",
+            {
+                "userId": self.user_id,
+                "hubId": hub_id,
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "error" in result:
             return []
-        devices = result.get("data", result.get("devices", result if isinstance(result, list) else []))
+
+        devices = result.get("devices") or result.get("data") or []
         return devices if isinstance(devices, list) else []
 
     async def get_hub_state(self, hub_id: str) -> Dict[str, Any]:
         """Get hub state."""
         if not self.user_id:
             return {}
-        result = await self._call_gateway("get-hub", {
-            "userId": self.user_id,
-            "hubId": hub_id,
-        })
-        if "error" in result:
+
+        result = await self._call_gateway(
+            "get-hub",
+            {
+                "userId": self.user_id,
+                "hubId": hub_id,
+            },
+        )
+
+        if isinstance(result, dict) and "error" in result:
             return {}
-        return result.get("data", result)
+        return result if isinstance(result, dict) else {}
 
     async def get_device_states(self, hub_id: str) -> List[Dict[str, Any]]:
         """Get device states."""
