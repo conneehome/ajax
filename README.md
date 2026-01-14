@@ -9,7 +9,7 @@
 
 Questa integrazione richiede un **Token Connee** per funzionare. Il token garantisce che solo gli utenti autorizzati possano utilizzare questa integrazione.
 
-Per ottenere il token, visita l'app [Connee Enterprise](https://github.com/conneehome/ajax).
+Per ottenere il token, contatta il supporto Connee Enterprise.
 
 ## ✨ Funzionalità
 

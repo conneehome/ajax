@@ -46,49 +46,58 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._password = user_input[CONF_PASSWORD]
             self._connee_token = user_input[CONF_CONNEE_TOKEN].strip()
             
-            _LOGGER.debug("Validating Connee token...")
+            _LOGGER.debug("Validating Connee token via API...")
 
-            # Validate Connee token by direct comparison
+            # Validate Connee token via API call
             if not self._connee_token:
                 errors["base"] = "invalid_connee_token"
                 _LOGGER.warning("Empty Connee token provided")
-            elif not validate_connee_token(self._connee_token):
-                errors["base"] = "invalid_connee_token"
-                _LOGGER.warning("Invalid Connee token provided (token length: %d)", len(self._connee_token))
             else:
-                _LOGGER.info("Connee token validated successfully")
-                
-                # Try to login to Ajax API
                 session = async_get_clientsession(self.hass)
-                api = AjaxApiClient(
-                    session=session,
-                    email=self._email,
-                    password=self._password,
-                    connee_token=self._connee_token,
+                
+                # Validate token with Connee API
+                is_valid = await validate_connee_token(
+                    session, 
+                    self._connee_token, 
+                    self._email
                 )
-
-                if await api.login():
-                    self._hubs = await api.get_hubs()
-                    if self._hubs:
-                        if len(self._hubs) == 1:
-                            # Only one hub, create entry directly
-                            hub = self._hubs[0]
-                            return self.async_create_entry(
-                                title=hub.get("name", "Ajax Hub"),
-                                data={
-                                    CONF_EMAIL: self._email,
-                                    CONF_PASSWORD: self._password,
-                                    CONF_CONNEE_TOKEN: self._connee_token,
-                                    CONF_HUB_ID: hub.get("id"),
-                                },
-                            )
-                        else:
-                            # Multiple hubs, let user select
-                            return await self.async_step_select_hub()
-                    else:
-                        errors["base"] = "no_hubs"
+                
+                if not is_valid:
+                    errors["base"] = "invalid_connee_token"
+                    _LOGGER.warning("Invalid Connee token for email: %s", self._email)
                 else:
-                    errors["base"] = "invalid_auth"
+                    _LOGGER.info("Connee token validated successfully via API")
+                    
+                    # Try to login to Ajax API
+                    api = AjaxApiClient(
+                        session=session,
+                        email=self._email,
+                        password=self._password,
+                        connee_token=self._connee_token,
+                    )
+
+                    if await api.login():
+                        self._hubs = await api.get_hubs()
+                        if self._hubs:
+                            if len(self._hubs) == 1:
+                                # Only one hub, create entry directly
+                                hub = self._hubs[0]
+                                return self.async_create_entry(
+                                    title=hub.get("name", "Ajax Hub"),
+                                    data={
+                                        CONF_EMAIL: self._email,
+                                        CONF_PASSWORD: self._password,
+                                        CONF_CONNEE_TOKEN: self._connee_token,
+                                        CONF_HUB_ID: hub.get("id"),
+                                    },
+                                )
+                            else:
+                                # Multiple hubs, let user select
+                                return await self.async_step_select_hub()
+                        else:
+                            errors["base"] = "no_hubs"
+                    else:
+                        errors["base"] = "invalid_auth"
 
         return self.async_show_form(
             step_id="user",
