@@ -10,9 +10,8 @@ CONF_POLLING_INTERVAL = "polling_interval"
 DEFAULT_POLLING_INTERVAL = 5
 DEFAULT_SCAN_INTERVAL = 30
 
-# API - Ajax Systems official API
-AJAX_API_BASE = "https://api.ajax.systems/api"
-API_KEY = "faeb7e1d9bc74bbe9939e5178a0222d2"
+# API - Connee Gateway (proxies to Ajax with authorization check)
+CONNEE_GATEWAY_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/ajax-api"
 TOKEN_REFRESH_INTERVAL = 600
 
 # Device Types

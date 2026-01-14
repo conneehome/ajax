@@ -1,15 +1,16 @@
 # Connee Enterprise - Private Ajax Systems Integration
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 
 **Use only for Connee** - Integrazione privata per sistemi di sicurezza Ajax Systems.
 
 ## 🔐 Autorizzazione Richiesta
 
-Questa integrazione richiede un **Token Connee** per funzionare. Il token garantisce che solo gli utenti autorizzati possano utilizzare questa integrazione.
+Questa integrazione richiede che il tuo account sia **attivato da Connee** per funzionare. 
+L'accesso viene verificato automaticamente tramite il gateway Connee.
 
-Per ottenere il token, contatta il supporto Connee Enterprise.
+Per richiedere l'attivazione, contatta il supporto Connee Enterprise.
 
 ## ✨ Funzionalità
 

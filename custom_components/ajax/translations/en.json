@@ -18,7 +18,7 @@
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials",
+      "invalid_auth": "Access denied. Make sure your account is activated by Connee.",
       "no_hubs": "No hubs found in your account"
     }
   }
