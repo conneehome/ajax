@@ -48,6 +48,7 @@ DEVICE_TYPE_MAP = {
     "MotionCamS": "binary_sensor",
     "MotionCam Outdoor": "binary_sensor",
     "MotionCamOutdoor": "binary_sensor",
+    "MotionCamOutdoorPhod": "binary_sensor",
     "MotionCam (PhOD) Jeweller": "binary_sensor",
     "MotionCam S (PhOD) Jeweller": "binary_sensor",
     "MotionCam Outdoor (PhOD) Jeweller": "binary_sensor",
@@ -57,6 +58,7 @@ DEVICE_TYPE_MAP = {
     "MotionCamFibra": "binary_sensor",
     "DualCurtain Outdoor": "binary_sensor",
     "DualCurtainOutdoor": "binary_sensor",
+    "DualCurtainOutdoorPhod": "binary_sensor",
     "Superior MotionProtect": "binary_sensor",
     "SuperiorMotionProtect": "binary_sensor",
 
@@ -155,6 +157,16 @@ DEVICE_TYPE_MAP = {
     "ReX2": "sensor",
 
     # ─────────────────────────────────────────────────────────────────────────
+    # WATER VALVES / WATERSTOP
+    # ─────────────────────────────────────────────────────────────────────────
+    "WaterStop": "valve",
+    "WaterStop 1/2": "valve",
+    "WaterStop 3/4": "valve",
+    "WaterStop 1": "valve",
+    "WaterStop Fibra": "valve",
+    "WaterStopFibra": "valve",
+
+    # ─────────────────────────────────────────────────────────────────────────
     # SMART POWER / SWITCHES / SOCKETS
     # ─────────────────────────────────────────────────────────────────────────
     "Socket": "switch",
@@ -243,6 +255,7 @@ DEVICE_CLASS_MAP = {
     "MotionCamS": "motion",
     "MotionCam Outdoor": "motion",
     "MotionCamOutdoor": "motion",
+    "MotionCamOutdoorPhod": "motion",
     "MotionCam (PhOD) Jeweller": "motion",
     "MotionCam S (PhOD) Jeweller": "motion",
     "MotionCam Outdoor (PhOD) Jeweller": "motion",

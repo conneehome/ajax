@@ -124,6 +124,28 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if reed_closed is True:
             return False
 
+        # Leak sensors (LeaksProtect): leakDetected=true => LEAK => ON
+        leak_detected = state.get("leakDetected")
+        if leak_detected is True:
+            return True
+        if leak_detected is False:
+            return False
+
+        # Smoke/Fire sensors: smokeAlarmDetected, temperatureAlarmDetected
+        if state.get("smokeAlarmDetected") is True:
+            return True
+        if state.get("temperatureAlarmDetected") is True:
+            return True
+
+        # Glass break sensors
+        if state.get("glassBreakDetected") is True:
+            return True
+
+        # Motion sensors: check state field
+        sensor_state = state.get("state", "")
+        if str(sensor_state).upper() == "ALARM":
+            return True
+
         # Generic fallback for motion/alarm-like payloads
         if state.get("active") is True:
             return True
