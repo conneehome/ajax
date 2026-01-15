@@ -5,16 +5,31 @@ views:
     icon: mdi:shield-home
     badges: []
     cards:
-      # Header with Connee Logo
+      # Header with Connee Logo (auto light/dark)
       - type: vertical-stack
         cards:
-          - type: picture
-            image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
-            tap_action:
-              action: url
-              url_path: https://connee.it
-            hold_action:
-              action: none
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sun.sun
+                state: above_horizon
+            card:
+              type: picture
+              image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
+              tap_action:
+                action: url
+                url_path: https://connee.it
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sun.sun
+                state: below_horizon
+            card:
+              type: picture
+              image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo-white.png
+              tap_action:
+                action: url
+                url_path: https://connee.it
           
           - type: markdown
             content: |
