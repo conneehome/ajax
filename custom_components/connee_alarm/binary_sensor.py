@@ -40,7 +40,7 @@ async def async_setup_entry(
 class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Connee Alarm binary sensor."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
@@ -50,9 +50,19 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._device_type = device.get("type", device.get("deviceType", ""))
         
         self._attr_unique_id = f"connee_alarm_{self._device_id}"
-        # Usa il nome esatto dall'app Ajax (es. "Sensore porta Aldo")
-        self._attr_name = device.get("name") or device.get("deviceName") or self._device_type
+        # Usa il nome esatto dall'app Ajax: di solito arriva come deviceName
+        display_name = (
+            device.get("deviceName")
+            or device.get("name")
+            or device.get("label")
+            or self._device_type
+        )
+        # Se il backend manda un 'name' generico uguale al tipo (DoorProtect, ecc.), preferisci deviceName
+        if display_name == self._device_type and device.get("deviceName"):
+            display_name = device.get("deviceName")
+        self._attr_name = display_name
         self._attr_manufacturer = MANUFACTURER
+
 
         device_class = DEVICE_CLASS_MAP.get(self._device_type)
         if device_class:
@@ -71,9 +81,11 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {})
         
+        # Extra attributes utili per debug
         attrs = {
             "device_type": self._device_type,
             "connee_id": self._device_id,
+            "ajax_device_name": self._device.get("deviceName") or self._device.get("name"),
         }
         
         if "battery" in state or "batteryLevel" in state:
