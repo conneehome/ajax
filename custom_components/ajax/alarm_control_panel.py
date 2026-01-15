@@ -73,19 +73,39 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
     @property
     def state(self) -> str:
         """Return current state."""
-        hub_state = self.coordinator.data.get("hub_state", {})
-        arm_state = hub_state.get("armState", hub_state.get("state", "unknown"))
-        
+        hub_state = self.coordinator.data.get("hub_state", {}) or {}
+        arm_state = (
+            hub_state.get("armingState")
+            or hub_state.get("armState")
+            or hub_state.get("state")
+            or hub_state.get("arming")
+            or hub_state.get("mode")
+            or "unknown"
+        )
+
+        state_norm = str(arm_state).upper()
+
         state_map = {
             "ARM": STATE_ALARM_ARMED_AWAY,
             "ARMED": STATE_ALARM_ARMED_AWAY,
+            "ARM_AWAY": STATE_ALARM_ARMED_AWAY,
+
             "PARTIAL_ARM": STATE_ALARM_ARMED_HOME,
+            "ARM_PARTIAL": STATE_ALARM_ARMED_HOME,
+            "ARM_PARTIAL_MODE": STATE_ALARM_ARMED_HOME,
+            "PARTIAL": STATE_ALARM_ARMED_HOME,
+
             "NIGHT_ARM": STATE_ALARM_ARMED_NIGHT,
+            "ARM_NIGHT": STATE_ALARM_ARMED_NIGHT,
+            "ARM_NIGHT_MODE": STATE_ALARM_ARMED_NIGHT,
+            "NIGHT": STATE_ALARM_ARMED_NIGHT,
+            "NIGHT_MODE": STATE_ALARM_ARMED_NIGHT,
+
             "DISARM": STATE_ALARM_DISARMED,
             "DISARMED": STATE_ALARM_DISARMED,
         }
-        
-        return state_map.get(str(arm_state).upper(), STATE_ALARM_DISARMED)
+
+        return state_map.get(state_norm, STATE_ALARM_DISARMED)
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm."""

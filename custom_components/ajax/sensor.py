@@ -174,26 +174,56 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
             model=self._device_type,
         )
 
+    def _coerce_int(self, val: Any) -> int | None:
+        """Try to coerce different value shapes into an int."""
+        if val is None:
+            return None
+        if isinstance(val, bool):
+            return None
+        if isinstance(val, (int, float)):
+            return int(val)
+        if isinstance(val, str):
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return None
+        if isinstance(val, dict):
+            for k in ("value", "percent", "percentage", "level", "charge"):
+                if k in val:
+                    return self._coerce_int(val.get(k))
+        return None
+
     def _get_battery_value(self, data: dict) -> int | None:
         """Extract battery value from data dict, trying multiple field names."""
-        # Try direct fields
-        for key in ("batteryCharge", "batteryLevel", "battery", "batteryPercent"):
-            val = data.get(key)
+        # Try direct fields (different Ajax payload variants)
+        for key in (
+            "batteryCharge",
+            "batteryLevel",
+            "batteryPercent",
+            "batteryPercentage",
+            "battery",
+            "battery_charge",
+            "battery_level",
+        ):
+            val = self._coerce_int(data.get(key))
             if val is not None:
-                try:
-                    return int(val)
-                except (ValueError, TypeError):
-                    pass
+                return val
+
         # Try nested battery object
         batt_obj = data.get("battery")
         if isinstance(batt_obj, dict):
-            for key in ("charge", "level", "percent", "percentage"):
-                val = batt_obj.get(key)
+            for key in (
+                "charge",
+                "level",
+                "percent",
+                "percentage",
+                "value",
+                "chargePercentage",
+            ):
+                val = self._coerce_int(batt_obj.get(key))
                 if val is not None:
-                    try:
-                        return int(val)
-                    except (ValueError, TypeError):
-                        pass
+                    return val
+
         return None
 
     @property
@@ -265,23 +295,42 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
 
     def _get_signal_value(self, data: dict) -> int | None:
         """Extract signal value from data dict, trying multiple field names."""
-        for key in ("signalLevel", "signal", "signalStrength", "rssi", "connectionQuality", "linkQuality"):
-            val = data.get(key)
-            if val is not None:
+        def coerce(val: Any) -> int | None:
+            if val is None or isinstance(val, bool):
+                return None
+            if isinstance(val, (int, float)):
+                return int(val)
+            if isinstance(val, str):
                 try:
-                    return int(val)
+                    return int(float(val))
                 except (ValueError, TypeError):
-                    pass
+                    return None
+            if isinstance(val, dict):
+                for k in ("value", "level", "signal", "quality", "rssi"):
+                    if k in val:
+                        return coerce(val.get(k))
+            return None
+
+        for key in (
+            "signalLevel",
+            "signal",
+            "signalStrength",
+            "rssi",
+            "connectionQuality",
+            "linkQuality",
+        ):
+            val = coerce(data.get(key))
+            if val is not None:
+                return val
+
         # Try nested connection object
         conn_obj = data.get("connection")
         if isinstance(conn_obj, dict):
-            for key in ("signal", "level", "quality", "rssi"):
-                val = conn_obj.get(key)
+            for key in ("signal", "level", "quality", "rssi", "value"):
+                val = coerce(conn_obj.get(key))
                 if val is not None:
-                    try:
-                        return int(val)
-                    except (ValueError, TypeError):
-                        pass
+                    return val
+
         return None
 
     @property
