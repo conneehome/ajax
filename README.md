@@ -1,24 +1,25 @@
-# Connee Enterprise - Private Ajax Systems Integration
+# Connee Alarm - Integrazione Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 
-**Use only for Connee** - Integrazione privata per sistemi di sicurezza Ajax Systems.
+**Integrazione ufficiale Connee** - Sistema di sicurezza per Home Assistant.
 
 ## 🔐 Autorizzazione Richiesta
 
 Questa integrazione richiede che il tuo account sia **attivato da Connee** per funzionare. 
 L'accesso viene verificato automaticamente tramite il gateway Connee.
 
-Per richiedere l'attivazione, contatta il supporto Connee Enterprise.
+Per richiedere l'attivazione, contatta il supporto Connee.
 
 ## ✨ Funzionalità
 
-- 🏠 **Alarm Control Panel** - Controllo completo arm/disarm del tuo hub Ajax
-- 📟 **Sensori** - Tutti i sensori Ajax come entità Home Assistant
+- 🏠 **Alarm Control Panel** - Controllo completo arm/disarm del tuo hub
+- 📟 **Sensori** - Tutti i sensori come entità Home Assistant
 - 🔋 **Batteria e Segnale** - Attributi per monitorare lo stato dei dispositivi
-- ⚡ **Polling Automatico** - Aggiornamenti periodici dello stato
+- ⚡ **Polling Automatico** - Aggiornamenti ogni 10 secondi
 - 🔄 **Token Refresh** - Rinnovo automatico della sessione
+- 📊 **Dashboard Integrata** - Pannello Lovelace preconfigurato nella sidebar
 
 ## 📦 Installazione HACS
 
@@ -29,23 +30,34 @@ Per richiedere l'attivazione, contatta il supporto Connee Enterprise.
 3. Aggiungi URL: `https://github.com/conneehome/ajax`
 4. Categoria: **Integrazione**
 5. Clicca **Aggiungi**
-6. Cerca "Ajax Systems by Connee" e installa
+6. Cerca "Connee Alarm" e installa
 7. Riavvia Home Assistant
 
 ### Metodo 2: Installazione Manuale
 
 1. Scarica lo ZIP da questo repository
-2. Estrai la cartella `custom_components/ajax` nella tua cartella `config/custom_components/`
+2. Estrai la cartella `custom_components/connee_alarm` nella tua cartella `config/custom_components/`
 3. Riavvia Home Assistant
 
 ## ⚙️ Configurazione
 
 1. Vai su **Impostazioni** → **Dispositivi e Servizi** → **Aggiungi Integrazione**
-2. Cerca "Ajax" o "Connee"
+2. Cerca "Connee Alarm"
 3. Inserisci:
-   - **Email Ajax**
-   - **Password Ajax**
+   - **Email** - La tua email registrata
+   - **Password** - La tua password
 4. Seleziona l'hub se ne hai più di uno
+
+**Nota:** Il tuo account deve essere attivato da Connee. Se ricevi errore "Accesso negato", contatta il supporto Connee.
+
+## 📊 Dashboard
+
+Dopo l'installazione, troverai automaticamente un pannello **"Connee Alarm"** nella sidebar di Home Assistant con:
+
+- Controllo allarme (Arm Away, Arm Home, Arm Night, Disarm)
+- Griglia sensori con stati in tempo reale
+- Monitor batterie
+- Log eventi recenti
 
 ## 🛡️ Dispositivi Supportati
 
@@ -72,7 +84,7 @@ automation:
     action:
       - service: alarm_control_panel.alarm_arm_away
         target:
-          entity_id: alarm_control_panel.ajax_alarm
+          entity_id: alarm_control_panel.connee_alarm
 ```
 
 ## 🐛 Problemi?
@@ -81,4 +93,4 @@ Apri una issue su [GitHub](https://github.com/conneehome/ajax/issues)
 
 ## 📄 Licenza
 
-MIT License - Connee Enterprise Team
+MIT License - Connee Team

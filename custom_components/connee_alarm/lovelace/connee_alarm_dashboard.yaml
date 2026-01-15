@@ -1,0 +1,110 @@
+title: Connee Alarm
+views:
+  - title: Panoramica
+    path: overview
+    icon: mdi:shield-home
+    badges: []
+    cards:
+      # Alarm Control Panel - Main Card
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: "🛡️ Connee Alarm"
+            subtitle: "Sistema di Sicurezza"
+          
+          - type: alarm-panel
+            entity: alarm_control_panel.connee_alarm
+            name: Allarme
+            states:
+              - arm_away
+              - arm_home
+              - arm_night
+            
+      # Sensor Grid
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: "📟 Sensori"
+            
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.connee_alarm_*
+                name: Sensori Porta
+                icon: mdi:door
+                icon_color: |-
+                  {% if is_state(entity, 'on') %}
+                    red
+                  {% else %}
+                    green
+                  {% endif %}
+                tap_action:
+                  action: more-info
+
+      # Battery Status
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: "🔋 Stato Batterie"
+            
+          - type: entities
+            entities:
+              - type: custom:auto-entities
+                card:
+                  type: custom:mushroom-chips-card
+                filter:
+                  include:
+                    - attributes:
+                        battery_level: "<= 20"
+                  exclude: []
+                sort:
+                  method: attribute
+                  attribute: battery_level
+
+      # Recent Events (requires logbook)
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: "📜 Eventi Recenti"
+            
+          - type: logbook
+            entities:
+              - alarm_control_panel.connee_alarm
+            hours_to_show: 24
+
+  - title: Sensori
+    path: sensors
+    icon: mdi:access-point
+    cards:
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Tutti i Sensori
+        filter:
+          include:
+            - domain: binary_sensor
+              integration: connee_alarm
+          exclude: []
+        sort:
+          method: name
+
+  - title: Impostazioni
+    path: settings
+    icon: mdi:cog
+    cards:
+      - type: entities
+        title: Configurazione
+        entities:
+          - type: custom:mushroom-entity-card
+            entity: alarm_control_panel.connee_alarm
+            secondary_info: last-changed
+            
+      - type: markdown
+        content: |
+          ## Connee Alarm v2.0.0
+          
+          **Supporto:** [Connee Support](https://connee.it/support)
+          
+          **Repository:** [GitHub](https://github.com/conneehome/ajax)
