@@ -3,10 +3,11 @@
     "step": {
       "user": {
         "title": "Connect Connee Alarm",
-        "description": "Enter your credentials to connect the alarm system.",
+        "description": "Enter your Ajax credentials to connect the alarm system. Data will transit through the Connee gateway exclusively for Home Assistant integration purposes.",
         "data": {
-          "email": "Email",
-          "password": "Password"
+          "email": "Ajax Email",
+          "password": "Ajax Password",
+          "accept_terms": "I accept data processing through the Connee gateway"
         }
       },
       "select_hub": {
@@ -18,8 +19,9 @@
       }
     },
     "error": {
-      "invalid_auth": "Access denied. Make sure your account is activated by Connee.",
-      "no_hubs": "No hubs found in your account"
+      "invalid_auth": "Access denied. Check your credentials or that your account is activated by Connee.",
+      "no_hubs": "No hubs found. Make sure you have accepted the invitation in the Ajax app.",
+      "terms_not_accepted": "You must accept the terms to continue."
     }
   }
 }

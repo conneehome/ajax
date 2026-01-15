@@ -142,29 +142,75 @@ def _log_device_diagnostics(devices: list) -> None:
 PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.VALVE]
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old entry to new version."""
+    import uuid
+    
+    _LOGGER.info("Migrating Connee Alarm from version %s", config_entry.version)
+    
+    if config_entry.version == 1:
+        # Version 1 -> 2: Add device_id
+        new_data = {**config_entry.data}
+        
+        if "device_id" not in new_data:
+            new_data["device_id"] = str(uuid.uuid4())
+            _LOGGER.info(
+                "Migration: Generated device_id %s for account %s",
+                new_data["device_id"][:8],
+                new_data.get("email", "unknown")
+            )
+        
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=new_data,
+            version=2
+        )
+        _LOGGER.info("Migration to version 2 successful")
+    
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Connee Alarm from a config entry."""
+    import uuid
+    
     hass.data.setdefault(DOMAIN, {})
 
     _log_build_info()
     _validate_device_catalog()
+
+    # Get or generate persistent device_id
+    device_id = entry.data.get("device_id")
+    if not device_id:
+        # This should not happen after migration, but just in case
+        device_id = str(uuid.uuid4())
+        _LOGGER.warning("device_id missing after migration, generated: %s", device_id[:8])
 
     session = async_get_clientsession(hass)
     api = ConneeAlarmApiClient(
         session=session,
         email=entry.data["email"],
         password=entry.data["password"],
+        device_id=device_id,
     )
 
-    # Login to API
+    _LOGGER.info("Initializing Connee Alarm with device_id: %s", device_id[:8])
+
+    # Login to API (with backoff protection)
     if not await api.login():
-        _LOGGER.error("Failed to login to Connee Alarm API")
+        _LOGGER.error(
+            "Failed to login to Connee Alarm API. "
+            "If this persists, check credentials or wait for any Ajax ban to expire."
+        )
         return False
 
     # Get hubs
     hubs = await api.get_hubs()
     if not hubs:
-        _LOGGER.error("No hubs found")
+        _LOGGER.error(
+            "No hubs found for this account. "
+            "Ensure the account has been invited to the hub in the Ajax app."
+        )
         return False
 
     # Use first hub or configured hub
@@ -183,6 +229,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "api": api,
         "coordinator": coordinator,
         "hub_id": hub_id,
+        "device_id": device_id,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

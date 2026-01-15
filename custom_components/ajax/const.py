@@ -1,9 +1,11 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
+VERSION = "2.1.0"  # Used in User-Agent header
 
 # Config
 CONF_HUB_ID = "hub_id"
+CONF_DEVICE_ID = "device_id"
 CONF_POLLING_INTERVAL = "polling_interval"
 
 # Defaults

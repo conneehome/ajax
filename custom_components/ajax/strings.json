@@ -3,10 +3,11 @@
     "step": {
       "user": {
         "title": "Connetti Connee Alarm",
-        "description": "Inserisci le tue credenziali per connettere il sistema di allarme.",
+        "description": "Inserisci le tue credenziali Ajax per connettere il sistema di allarme. I dati transiteranno attraverso il gateway Connee esclusivamente per la finalità di integrazione con Home Assistant.",
         "data": {
-          "email": "Email",
-          "password": "Password"
+          "email": "Email Ajax",
+          "password": "Password Ajax",
+          "accept_terms": "Accetto il trattamento dei dati tramite il gateway Connee"
         }
       },
       "select_hub": {
@@ -18,8 +19,9 @@
       }
     },
     "error": {
-      "invalid_auth": "Accesso negato. Verifica che il tuo account sia attivato da Connee.",
-      "no_hubs": "Nessun hub trovato nel tuo account"
+      "invalid_auth": "Accesso negato. Verifica le credenziali o che il tuo account sia attivato da Connee.",
+      "no_hubs": "Nessun hub trovato. Verifica di aver accettato l'invito nell'app Ajax.",
+      "terms_not_accepted": "Devi accettare i termini per continuare."
     }
   }
 }

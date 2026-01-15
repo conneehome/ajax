@@ -55,10 +55,15 @@ async def async_setup_entry(
     """Set up Connee Alarm sensors."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
+    api = data["api"]
 
     entities = []
     devices = coordinator.data.get("devices", [])
     states = coordinator.data.get("device_states", {})
+
+    # Add diagnostic connection status sensor (always first)
+    entities.append(ConneeAlarmConnectionSensor(coordinator, api, entry))
+
 
     for device in devices:
         device_id = device.get("id") or device.get("deviceId")
@@ -374,3 +379,74 @@ class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
             "device_type": self._device_type,
             "connee_id": self._device_id,
         }
+
+
+class ConneeAlarmConnectionSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor showing connection status to Connee Gateway."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:cloud-check"
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, api, entry: ConfigEntry):
+        """Initialize the connection sensor."""
+        super().__init__(coordinator)
+        self._api = api
+        self._entry = entry
+        self._attr_unique_id = f"ajax_{entry.entry_id}_connection_status"
+        self._attr_name = "Connee Alarm Stato Connessione"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
+            name="Connee Gateway",
+            manufacturer=MANUFACTURER,
+            model="Cloud Gateway",
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return the connection status."""
+        status = self._api.connection_status
+        status_map = {
+            "connected": "Connesso",
+            "backoff": "Sospeso",
+            "auth_error": "Errore Autenticazione",
+            "disconnected": "Disconnesso",
+        }
+        return status_map.get(status, status)
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on status."""
+        status = self._api.connection_status
+        icons = {
+            "connected": "mdi:cloud-check",
+            "backoff": "mdi:cloud-alert",
+            "auth_error": "mdi:cloud-off-outline",
+            "disconnected": "mdi:cloud-question",
+        }
+        return icons.get(status, "mdi:cloud")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return detailed status information."""
+        attrs = {
+            "status_detail": self._api.connection_status_detail,
+            "device_id": self._api.device_id[:8] + "...",
+            "email": self._api.email,
+        }
+        
+        if self._api.backoff_remaining_seconds > 0:
+            attrs["backoff_remaining_seconds"] = self._api.backoff_remaining_seconds
+            attrs["backoff_remaining_minutes"] = round(self._api.backoff_remaining_seconds / 60, 1)
+        
+        if self._api.token_expires:
+            attrs["token_expires"] = self._api.token_expires.isoformat()
+        
+        if self._api._consecutive_failures > 0:
+            attrs["consecutive_failures"] = self._api._consecutive_failures
+        
+        return attrs
+
+    @property
+    def available(self) -> bool:
+        """Always available so user can see status."""
+        return True
