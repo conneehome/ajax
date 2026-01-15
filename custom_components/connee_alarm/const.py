@@ -1,6 +1,6 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "connee_alarm"
-MANUFACTURER = "Connee"
+MANUFACTURER = "Ajax Systems by Connee"
 
 # Config
 CONF_HUB_ID = "hub_id"

@@ -46,7 +46,8 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
         self._device_type = device.get("type", device.get("deviceType", ""))
         
         self._attr_unique_id = f"connee_alarm_{self._device_id}"
-        self._attr_name = device.get("name", f"Connee {self._device_type}")
+        # Usa il nome esatto dall'app Ajax (es. "Sensore porta Aldo")
+        self._attr_name = device.get("name") or device.get("deviceName") or self._device_type
         self._attr_manufacturer = MANUFACTURER
 
     @property

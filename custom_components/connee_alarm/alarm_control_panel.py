@@ -55,7 +55,7 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         self._api = api
         self._hub_id = hub_id
         self._attr_unique_id = f"connee_alarm_{hub_id}_alarm"
-        self._attr_name = "Connee Alarm"
+        self._attr_name = "Ajax Alarm"
         self._attr_manufacturer = MANUFACTURER
 
     @property

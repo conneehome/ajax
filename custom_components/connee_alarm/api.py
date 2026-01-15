@@ -108,7 +108,10 @@ class ConneeAlarmApiClient:
         if not self.user_id:
             return []
 
-        result = await self._call_gateway("get-user-hubs", {"userId": self.user_id})
+        result = await self._call_gateway("get-user-hubs", {
+            "userId": self.user_id,
+            "email": self.email,  # Pass email to update last_used_at
+        })
 
         if isinstance(result, dict) and "error" in result:
             return []
@@ -141,6 +144,7 @@ class ConneeAlarmApiClient:
             {
                 "userId": self.user_id,
                 "hubId": hub_id,
+                "email": self.email,  # Pass email to update last_used_at
             },
         )
 
@@ -162,6 +166,7 @@ class ConneeAlarmApiClient:
             {
                 "userId": self.user_id,
                 "hubId": hub_id,
+                "email": self.email,  # Pass email to update last_used_at
             },
         )
 
@@ -176,6 +181,7 @@ class ConneeAlarmApiClient:
         result = await self._call_gateway("get-all-device-states", {
             "userId": self.user_id,
             "hubId": hub_id,
+            "email": self.email,  # Pass email to update last_used_at
         })
         if "error" in result:
             return []

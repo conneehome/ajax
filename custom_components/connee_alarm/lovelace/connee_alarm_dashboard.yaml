@@ -3,141 +3,65 @@ views:
   - title: Panoramica
     path: overview
     icon: mdi:shield-home
-    badges: []
     cards:
-      # Header with Connee Logo (auto light/dark)
-      - type: vertical-stack
-        cards:
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: sun.sun
-                state: above_horizon
-            card:
-              type: picture
-              image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
-              tap_action:
-                action: url
-                url_path: https://connee.it
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: sun.sun
-                state: below_horizon
-            card:
-              type: picture
-              image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo-white.png
-              tap_action:
-                action: url
-                url_path: https://connee.it
+      # Header (logo automatico light/dark)
+      - type: picture
+        image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
+        dark_mode_image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo-white.png
+        tap_action:
+          action: url
+          url_path: https://connee.it
+
+      # Alarm Control Panel
+      - type: alarm-panel
+        entity: alarm_control_panel.connee_alarm
+        name: Ajax Alarm
+        states:
+          - arm_away
+          - arm_home
+          - arm_night
+
+      # Sensori (aggiungili dopo averli trovati in Strumenti Sviluppatore → Stati)
+      - type: entities
+        title: Sensori (aggiungi i tuoi)
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - type: section
+            label: Istruzioni rapide
+          - type: weblink
+            name: Trova entità "connee_alarm"
+            url: /developer-tools/state
+          - type: section
+            label: Incolla qui i tuoi sensori
+          # Esempio (sostituisci con i tuoi entity_id reali):
+          # - entity: binary_sensor.connee_alarm_00c1d3d1
+
+      - type: logbook
+        title: Eventi Recenti
+        entities:
+          - alarm_control_panel.connee_alarm
+        hours_to_show: 24
+
+  - title: Tutte le Entità
+    path: entities
+    icon: mdi:format-list-bulleted
+    cards:
+      - type: markdown
+        content: |
+          In Home Assistant vai su **Impostazioni → Dispositivi e Servizi → Entità** e filtra per **"connee"**.
           
-          - type: markdown
-            content: |
-              # 🛡️ Sistema di Sicurezza
-              ---
-      
-      # Alarm Control Panel - Main Card
-      - type: vertical-stack
-        cards:
-          - type: alarm-panel
-            entity: alarm_control_panel.connee_alarm
-            name: Controllo Allarme
-            states:
-              - arm_away
-              - arm_home
-              - arm_night
-            
-      # Sensor Grid
-      - type: vertical-stack
-        cards:
-          - type: markdown
-            content: "## 📟 Sensori"
-            
-          - type: grid
-            columns: 2
-            square: false
-            cards:
-              - type: custom:mushroom-entity-card
-                entity: binary_sensor.connee_alarm_*
-                name: Sensori Porta
-                icon: mdi:door
-                icon_color: |-
-                  {% if is_state(entity, 'on') %}
-                    red
-                  {% else %}
-                    green
-                  {% endif %}
-                tap_action:
-                  action: more-info
-
-      # Battery Status
-      - type: vertical-stack
-        cards:
-          - type: markdown
-            content: "## 🔋 Stato Batterie"
-            
-          - type: entities
-            entities:
-              - type: custom:auto-entities
-                card:
-                  type: custom:mushroom-chips-card
-                filter:
-                  include:
-                    - attributes:
-                        battery_level: "<= 20"
-                  exclude: []
-                sort:
-                  method: attribute
-                  attribute: battery_level
-
-      # Recent Events (requires logbook)
-      - type: vertical-stack
-        cards:
-          - type: markdown
-            content: "## 📜 Eventi Recenti"
-            
-          - type: logbook
-            entities:
-              - alarm_control_panel.connee_alarm
-            hours_to_show: 24
-
-  - title: Sensori
-    path: sensors
-    icon: mdi:access-point
-    cards:
-      - type: custom:auto-entities
-        card:
-          type: entities
-          title: Tutti i Sensori
-        filter:
-          include:
-            - domain: binary_sensor
-              integration: connee_alarm
-          exclude: []
-        sort:
-          method: name
+          I nomi delle entità vengono mostrati come **Ajax ...** (es. *Ajax DoorProtect*) come nell'app Ajax.
 
   - title: Impostazioni
     path: settings
     icon: mdi:cog
     cards:
-      - type: picture
-        image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
-        tap_action:
-          action: url
-          url_path: https://connee.it
-          
-      - type: entities
-        title: Configurazione
-        entities:
-          - type: custom:mushroom-entity-card
-            entity: alarm_control_panel.connee_alarm
-            secondary_info: last-changed
-            
       - type: markdown
         content: |
-          ## Connee Alarm v2.0.0
+          ## Connee Alarm
           
-          **Supporto:** [Connee Support](https://connee.it/support)
+          - **Alarm entity:** alarm_control_panel.connee_alarm
+          - Sensori: cerca "connee_alarm" in **Strumenti Sviluppatore → Stati**
           
-          **Repository:** [GitHub](https://github.com/conneehome/ajax)
+          **Versione:** 2.0.0
