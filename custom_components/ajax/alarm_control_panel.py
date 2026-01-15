@@ -1,4 +1,4 @@
-"""Alarm control panel for Ajax integration."""
+"""Alarm control panel for Connee Alarm integration."""
 import logging
 from typing import Any
 
@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
-from .coordinator import AjaxDataCoordinator
+from .coordinator import ConneeAlarmDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,17 +28,17 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Ajax alarm control panel."""
+    """Set up Connee Alarm control panel."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     api = data["api"]
     hub_id = data["hub_id"]
 
-    async_add_entities([AjaxAlarmControlPanel(coordinator, api, hub_id)])
+    async_add_entities([ConneeAlarmControlPanel(coordinator, api, hub_id)])
 
 
-class AjaxAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
-    """Ajax alarm control panel."""
+class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
+    """Connee Alarm control panel."""
 
     _attr_has_entity_name = True
     _attr_code_required = False
@@ -49,12 +49,12 @@ class AjaxAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         | AlarmControlPanelEntityFeature.ARM_NIGHT
     )
 
-    def __init__(self, coordinator: AjaxDataCoordinator, api, hub_id: str):
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, api, hub_id: str):
         """Initialize."""
         super().__init__(coordinator)
         self._api = api
         self._hub_id = hub_id
-        self._attr_unique_id = f"ajax_{hub_id}_alarm"
+        self._attr_unique_id = f"connee_alarm_{hub_id}_alarm"
         self._attr_name = "Ajax Alarm"
         self._attr_manufacturer = MANUFACTURER
 

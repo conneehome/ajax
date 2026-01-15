@@ -2,11 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connetti Ajax Systems",
-        "description": "Inserisci le tue credenziali Ajax per connettere il sistema.",
+        "title": "Connetti Connee Alarm",
+        "description": "Inserisci le tue credenziali per connettere il sistema di allarme.",
         "data": {
-          "email": "Email Ajax",
-          "password": "Password Ajax"
+          "email": "Email",
+          "password": "Password"
         }
       },
       "select_hub": {

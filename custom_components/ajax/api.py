@@ -1,4 +1,4 @@
-"""Ajax API Client - Connee Gateway."""
+"""Connee Alarm API Client."""
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
@@ -10,8 +10,8 @@ from .const import CONNEE_GATEWAY_URL, TOKEN_REFRESH_INTERVAL
 _LOGGER = logging.getLogger(__name__)
 
 
-class AjaxApiClient:
-    """Client for Ajax Systems via Connee Gateway."""
+class ConneeAlarmApiClient:
+    """Client for Connee Alarm API."""
 
     def __init__(
         self,
@@ -52,7 +52,6 @@ class AjaxApiClient:
                 result = await resp.json()
 
                 if resp.status == 200 and isinstance(result, dict) and result.get("success"):
-                    # Return the actual payload (can be dict or list)
                     return result.get("data")
 
                 if isinstance(result, dict):
@@ -109,19 +108,20 @@ class AjaxApiClient:
         if not self.user_id:
             return []
 
-        result = await self._call_gateway("get-user-hubs", {"userId": self.user_id})
+        result = await self._call_gateway("get-user-hubs", {
+            "userId": self.user_id,
+            "email": self.email,  # Pass email to update last_used_at
+        })
 
         if isinstance(result, dict) and "error" in result:
             return []
 
-        # Parse hub list
         hubs_raw = []
         if isinstance(result, list):
             hubs_raw = result
         elif isinstance(result, dict):
             hubs_raw = result.get("hubs") or result.get("data") or []
 
-        # Normalize hub data - map hubId to id
         hubs = []
         for h in hubs_raw:
             hub_id = h.get("hubId") or h.get("id") or h.get("deviceId")
@@ -144,6 +144,7 @@ class AjaxApiClient:
             {
                 "userId": self.user_id,
                 "hubId": hub_id,
+                "email": self.email,  # Pass email to update last_used_at
             },
         )
 
@@ -165,6 +166,7 @@ class AjaxApiClient:
             {
                 "userId": self.user_id,
                 "hubId": hub_id,
+                "email": self.email,  # Pass email to update last_used_at
             },
         )
 
@@ -179,6 +181,7 @@ class AjaxApiClient:
         result = await self._call_gateway("get-all-device-states", {
             "userId": self.user_id,
             "hubId": hub_id,
+            "email": self.email,  # Pass email to update last_used_at
         })
         if "error" in result:
             return []
