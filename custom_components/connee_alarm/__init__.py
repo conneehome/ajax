@@ -9,13 +9,14 @@ import json
 import logging
 from datetime import timedelta
 from pathlib import Path
+from collections import Counter
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import DOMAIN, DEVICE_TYPE_MAP, DEVICE_CLASS_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
 from .coordinator import ConneeAlarmDataCoordinator
 from .api import ConneeAlarmApiClient
 from .panel import async_register_panel
@@ -30,12 +31,112 @@ def _log_build_info() -> None:
         if build_path.exists():
             info = json.loads(build_path.read_text())
             _LOGGER.info(
-                "Connee Alarm build: %s (version %s)",
+                "Connee Alarm build: %s (version %s) source=%s",
                 info.get("build_id"),
                 info.get("version"),
+                info.get("source"),
             )
     except Exception as err:
         _LOGGER.debug("Build info not available: %s", err)
+
+
+def _validate_device_catalog() -> None:
+    """
+    Validate consistency of device catalog at startup.
+    Logs warnings for any misconfigurations to help developers maintain the catalog.
+    """
+    issues = []
+
+    # 1. Check that all binary_sensor types have a DEVICE_CLASS_MAP entry
+    binary_sensor_types = [k for k, v in DEVICE_TYPE_MAP.items() if v == "binary_sensor"]
+    for dtype in binary_sensor_types:
+        if dtype not in DEVICE_CLASS_MAP:
+            issues.append(f"binary_sensor '{dtype}' missing from DEVICE_CLASS_MAP")
+
+    # 2. Check that all battery devices exist in DEVICE_TYPE_MAP
+    for dtype in BATTERY_DEVICES:
+        if dtype not in DEVICE_TYPE_MAP:
+            issues.append(f"BATTERY_DEVICES entry '{dtype}' not in DEVICE_TYPE_MAP")
+
+    # 3. Check that all temperature devices exist in DEVICE_TYPE_MAP
+    for dtype in TEMPERATURE_DEVICES:
+        if dtype not in DEVICE_TYPE_MAP:
+            issues.append(f"TEMPERATURE_DEVICES entry '{dtype}' not in DEVICE_TYPE_MAP")
+
+    # 4. Check that temperature devices are NOT hub types
+    for dtype in TEMPERATURE_DEVICES:
+        if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
+            issues.append(f"TEMPERATURE_DEVICES entry '{dtype}' is a hub (alarm_control_panel)")
+
+    # Log results
+    if issues:
+        _LOGGER.warning("CATALOG VALIDATION: Found %d issues:", len(issues))
+        for issue in issues[:20]:  # Limit to 20 to avoid log spam
+            _LOGGER.warning("  - %s", issue)
+        if len(issues) > 20:
+            _LOGGER.warning("  ... and %d more issues", len(issues) - 20)
+    else:
+        _LOGGER.debug("CATALOG VALIDATION: All device maps are consistent.")
+
+
+def _log_device_diagnostics(devices: list) -> None:
+    """Log device diagnostics to help troubleshoot missing entities."""
+    if not devices:
+        _LOGGER.warning("DIAG: No devices received from API!")
+        return
+
+    _LOGGER.info("DIAG: Total devices received from API: %d", len(devices))
+
+    # Count device types
+    type_counter: Counter = Counter()
+    unknown_types: list = []
+    name_samples: list = []
+
+    for d in devices:
+        dtype = d.get("type") or d.get("deviceType") or "MISSING_TYPE"
+        dtype = str(dtype).strip()
+        type_counter[dtype] += 1
+        if dtype not in DEVICE_TYPE_MAP and dtype != "MISSING_TYPE":
+            unknown_types.append(dtype)
+
+        # Log name resolution for first few devices
+        if len(name_samples) < 5:
+            device_name = d.get("deviceName")
+            name_field = d.get("name")
+            label_field = d.get("label")
+            resolved = device_name or name_field or label_field or dtype
+            name_samples.append({
+                "deviceName": device_name,
+                "name": name_field,
+                "label": label_field,
+                "resolved": resolved,
+                "type": dtype,
+            })
+
+    # Log summary
+    for dtype, count in type_counter.most_common():
+        mapped = DEVICE_TYPE_MAP.get(dtype, "UNMAPPED (fallback sensor)")
+        _LOGGER.info("DIAG:   %s x%d -> %s", dtype, count, mapped)
+
+    if unknown_types:
+        _LOGGER.warning(
+            "DIAG: Unknown device types (not in DEVICE_TYPE_MAP, will use fallback): %s",
+            list(set(unknown_types)),
+        )
+    else:
+        _LOGGER.info("DIAG: All device types are mapped.")
+
+    # Log name resolution samples
+    _LOGGER.info("DIAG: Name resolution samples (first 5 devices):")
+    for sample in name_samples:
+        _LOGGER.info(
+            "DIAG:   type=%s | deviceName=%s | name=%s | label=%s | RESOLVED=%s",
+            sample["type"],
+            sample["deviceName"],
+            sample["name"],
+            sample["label"],
+            sample["resolved"],
+        )
 
 
 PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -46,6 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     _log_build_info()
+    _validate_device_catalog()
 
     session = async_get_clientsession(hass)
     api = ConneeAlarmApiClient(
@@ -72,6 +174,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create coordinator
     coordinator = ConneeAlarmDataCoordinator(hass, api, hub_id)
     await coordinator.async_config_entry_first_refresh()
+
+    # Diagnostics: log device info
+    devices = coordinator.data.get("devices", [])
+    _log_device_diagnostics(devices)
 
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
