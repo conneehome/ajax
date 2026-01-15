@@ -1,4 +1,4 @@
-"""Alarm control panel for Connee Alarm integration."""
+"""Alarm control panel for Ajax integration."""
 import logging
 from typing import Any
 
@@ -34,11 +34,11 @@ async def async_setup_entry(
     api = data["api"]
     hub_id = data["hub_id"]
 
-    async_add_entities([ConneeAlarmControlPanel(coordinator, api, hub_id)])
+    async_add_entities([AjaxControlPanel(coordinator, api, hub_id)])
 
 
-class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
-    """Connee Alarm control panel."""
+class AjaxControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
+    """Ajax control panel."""
 
     _attr_has_entity_name = True
     _attr_code_required = False
@@ -49,7 +49,7 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         | AlarmControlPanelEntityFeature.ARM_NIGHT
     )
 
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, api, hub_id: str):
+    def __init__(self, coordinator: AjaxDataCoordinator, api, hub_id: str):
         """Initialize."""
         super().__init__(coordinator)
         self._api = api

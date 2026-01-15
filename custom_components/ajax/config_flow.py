@@ -1,4 +1,4 @@
-"""Config flow for Connee Alarm integration."""
+"""Config flow for Ajax integration."""
 import logging
 from typing import Any, Dict, Optional
 
@@ -22,8 +22,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-class ConneeAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Connee Alarm."""
+class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Ajax."""
 
     VERSION = 1
 
@@ -45,7 +45,7 @@ class ConneeAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             session = async_get_clientsession(self.hass)
             
-            api = ConneeAlarmApiClient(
+            api = AjaxApiClient(
                 session=session,
                 email=self._email,
                 password=self._password,

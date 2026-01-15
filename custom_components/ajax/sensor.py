@@ -1,4 +1,4 @@
-"""Sensors for Connee Alarm integration."""
+"""Sensors for Ajax integration."""
 import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_TYPE_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
-from .coordinator import ConneeAlarmDataCoordinator
+from .coordinator import AjaxDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ async def async_setup_entry(
         # Main sensor: create it for anything that is NOT a binary_sensor
         # (includes sensor types, switches/lights we don't control yet, and unknown devices)
         if platform != "binary_sensor":
-            entities.append(ConneeAlarmSensor(coordinator, device))
+            entities.append(AjaxSensor(coordinator, device))
 
         # Battery sensor:
         # - always add for battery-powered devices
@@ -86,10 +86,10 @@ async def async_setup_entry(
             or any(k in state for k in ("battery", "batteryLevel", "batteryCharge"))
         )
         if has_battery:
-            entities.append(ConneeAlarmBatterySensor(coordinator, device))
+            entities.append(AjaxBatterySensor(coordinator, device))
 
         # Signal strength sensor: ALWAYS add (this was the main cause of “14 entities”) 
-        entities.append(ConneeAlarmSignalSensor(coordinator, device))
+        entities.append(AjaxSignalSensor(coordinator, device))
 
         # Temperature sensor:
         has_temp = (
@@ -97,17 +97,17 @@ async def async_setup_entry(
             or any(k in state for k in ("temperature", "temp"))
         )
         if has_temp:
-            entities.append(ConneeAlarmTemperatureSensor(coordinator, device))
+            entities.append(AjaxTemperatureSensor(coordinator, device))
 
     async_add_entities(entities)
 
 
-class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
-    """Connee Alarm main sensor (generic status)."""
+class AjaxSensor(CoordinatorEntity, SensorEntity):
+    """Ajax main sensor (generic status)."""
 
     _attr_has_entity_name = False
 
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -141,14 +141,14 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
         """Return extra attributes."""
         return {
             "device_type": self._device_type,
-            "connee_id": self._device_id,
+            "ajax_id": self._device_id,
             "name_candidate_deviceName": self._device.get("deviceName"),
             "name_candidate_name": self._device.get("name"),
         }
 
 
-class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
-    """Connee Alarm battery sensor."""
+class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
+    """Ajax battery sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "Batteria"
@@ -156,7 +156,7 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -267,15 +267,15 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
-    """Connee Alarm signal strength sensor."""
+class AjaxSignalSensor(CoordinatorEntity, SensorEntity):
+    """Ajax signal strength sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "Segnale"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:wifi"
 
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -375,8 +375,8 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
-    """Connee Alarm temperature sensor."""
+class AjaxTemperatureSensor(CoordinatorEntity, SensorEntity):
+    """Ajax temperature sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "Temperatura"
@@ -385,7 +385,7 @@ class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:thermometer"
 
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -421,5 +421,5 @@ class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
         """Return extra attributes."""
         return {
             "device_type": self._device_type,
-            "connee_id": self._device_id,
+            "ajax_id": self._device_id,
         }

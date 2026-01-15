@@ -1,4 +1,4 @@
-"""Data coordinator for Connee Alarm integration."""
+"""Data coordinator for Ajax integration."""
 import asyncio
 import logging
 from datetime import timedelta
@@ -13,10 +13,10 @@ from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
 _LOGGER = logging.getLogger(__name__)
 
 
-class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Connee Alarm data."""
+class AjaxDataCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching Ajax data."""
 
-    def __init__(self, hass: HomeAssistant, api: ConneeAlarmApiClient, hub_id: str):
+    def __init__(self, hass: HomeAssistant, api: AjaxApiClient, hub_id: str):
         """Initialize."""
         super().__init__(
             hass,

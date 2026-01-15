@@ -1,4 +1,4 @@
-"""Connee Alarm API Client."""
+"""Ajax Alarm API Client."""
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
@@ -10,8 +10,8 @@ from .const import CONNEE_GATEWAY_URL, TOKEN_REFRESH_INTERVAL
 _LOGGER = logging.getLogger(__name__)
 
 
-class ConneeAlarmApiClient:
-    """Client for Connee Alarm API."""
+class AjaxApiClient:
+    """Client for Ajax API via Connee Gateway."""
 
     def __init__(
         self,

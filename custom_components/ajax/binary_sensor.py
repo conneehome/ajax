@@ -1,4 +1,4 @@
-"""Binary sensors for Connee Alarm integration."""
+"""Binary sensors for Ajax integration."""
 import logging
 from typing import Any
 
@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_CLASS_MAP, DEVICE_TYPE_MAP
-from .coordinator import ConneeAlarmDataCoordinator
+from .coordinator import AjaxDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Connee Alarm binary sensors."""
+    """Set up Ajax binary sensors."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
 
@@ -72,23 +72,23 @@ async def async_setup_entry(
 
         # Primary binary-sensor types (door/motion/leak/smoke...)
         if platform == "binary_sensor":
-            entities.append(ConneeAlarmBinarySensor(coordinator, device))
+            entities.append(AjaxBinarySensor(coordinator, device))
             continue
 
         # Fallback: if state payload contains door-like fields, expose it anyway
         state = states.get(device_id, {}) if isinstance(states, dict) else {}
         if any(k in state for k in ("reedClosed", "openState", "magneticState", "contactState")):
-            entities.append(ConneeAlarmBinarySensor(coordinator, device))
+            entities.append(AjaxBinarySensor(coordinator, device))
 
     async_add_entities(entities)
 
 
-class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
-    """Connee Alarm binary sensor."""
+class AjaxBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    """Ajax binary sensor."""
 
     _attr_has_entity_name = False
 
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device

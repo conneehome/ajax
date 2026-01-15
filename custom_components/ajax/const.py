@@ -1,4 +1,4 @@
-"""Constants for Connee Alarm integration."""
+"""Constants for Ajax integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
 

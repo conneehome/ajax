@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect Connee Alarm",
+        "title": "Connect Ajax Systems",
         "description": "Enter your credentials to connect the alarm system.",
         "data": {
           "email": "Email",
