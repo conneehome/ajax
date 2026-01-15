@@ -1,4 +1,4 @@
-"""Config flow for Ajax integration."""
+"""Config flow for Connee Alarm integration."""
 import logging
 from typing import Any, Dict, Optional
 
@@ -10,7 +10,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DOMAIN, CONF_HUB_ID
-from .api import AjaxApiClient
+from .api import ConneeAlarmApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,8 +22,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Ajax."""
+class ConneeAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Connee Alarm."""
 
     VERSION = 1
 
@@ -45,7 +45,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             session = async_get_clientsession(self.hass)
             
-            api = AjaxApiClient(
+            api = ConneeAlarmApiClient(
                 session=session,
                 email=self._email,
                 password=self._password,
@@ -57,7 +57,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if len(self._hubs) == 1:
                         hub = self._hubs[0]
                         return self.async_create_entry(
-                        title=f"Ajax - {hub.get('name', 'Hub')}",
+                            title=f"Connee Alarm - {hub.get('name', 'Hub')}",
                             data={
                                 CONF_EMAIL: self._email,
                                 CONF_PASSWORD: self._password,
@@ -86,7 +86,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             hub = next((h for h in self._hubs if h.get("id") == hub_id), self._hubs[0])
             
             return self.async_create_entry(
-                title=f"Ajax - {hub.get('name', 'Hub')}",
+                title=f"Connee Alarm - {hub.get('name', 'Hub')}",
                 data={
                     CONF_EMAIL: self._email,
                     CONF_PASSWORD: self._password,

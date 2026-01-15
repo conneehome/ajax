@@ -17,8 +17,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DOMAIN, DEVICE_TYPE_MAP, DEVICE_CLASS_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
-from .coordinator import AjaxDataCoordinator
-from .api import AjaxApiClient
+from .coordinator import ConneeAlarmDataCoordinator
+from .api import ConneeAlarmApiClient
+from .panel import async_register_panel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -142,14 +143,14 @@ PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENS
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Ajax from a config entry."""
+    """Set up Connee Alarm from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
     _log_build_info()
     _validate_device_catalog()
 
     session = async_get_clientsession(hass)
-    api = AjaxApiClient(
+    api = ConneeAlarmApiClient(
         session=session,
         email=entry.data["email"],
         password=entry.data["password"],
@@ -171,7 +172,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api.hub_id = hub_id
 
     # Create coordinator
-    coordinator = AjaxDataCoordinator(hass, api, hub_id)
+    coordinator = ConneeAlarmDataCoordinator(hass, api, hub_id)
     await coordinator.async_config_entry_first_refresh()
 
     # Diagnostics: log device info
@@ -185,6 +186,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Register sidebar dashboard panel
+    await async_register_panel(hass)
 
     return True
 

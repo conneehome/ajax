@@ -1,7 +1,7 @@
 # Connee Alarm - Integrazione Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.11-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.12-blue.svg)
 
 **Integrazione ufficiale Connee** - Sistema di sicurezza per Home Assistant.
 
@@ -36,13 +36,14 @@ Per richiedere l'attivazione, contatta il supporto Connee.
 ### Metodo 2: Installazione Manuale
 
 1. Scarica lo ZIP da questo repository
-2. Estrai la cartella `custom_components/ajax` nella tua cartella `config/custom_components/`
-3. Riavvia Home Assistant
+2. Estrai la cartella `custom_components/connee_alarm` nella tua cartella `config/custom_components/`
+3. Copia la cartella `www/connee_alarm` nella tua cartella `config/www/` (per il logo)
+4. Riavvia Home Assistant
 
 ## ⚙️ Configurazione
 
 1. Vai su **Impostazioni** → **Dispositivi e Servizi** → **Aggiungi Integrazione**
-2. Cerca "Ajax Systems"
+2. Cerca "Connee Alarm"
 3. Inserisci:
    - **Email** - La tua email registrata
    - **Password** - La tua password
@@ -85,7 +86,7 @@ automation:
     action:
       - service: alarm_control_panel.alarm_arm_away
         target:
-          entity_id: alarm_control_panel.ajax
+          entity_id: alarm_control_panel.connee_alarm
 ```
 
 ## 🐛 Problemi?

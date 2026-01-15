@@ -1,4 +1,4 @@
-"""Sensors for Ajax integration."""
+"""Sensors for Connee Alarm integration."""
 import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, MANUFACTURER, DEVICE_TYPE_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
-from .coordinator import AjaxDataCoordinator
+from .coordinator import ConneeAlarmDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Ajax sensors."""
+    """Set up Connee Alarm sensors."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
 
@@ -75,7 +75,7 @@ async def async_setup_entry(
         # Main sensor: create it for anything that is NOT a binary_sensor
         # (includes sensor types, switches/lights we don't control yet, and unknown devices)
         if platform != "binary_sensor":
-            entities.append(AjaxSensor(coordinator, device))
+            entities.append(ConneeAlarmSensor(coordinator, device))
 
         # Battery sensor:
         # - always add for battery-powered devices
@@ -86,10 +86,10 @@ async def async_setup_entry(
             or any(k in state for k in ("battery", "batteryLevel", "batteryCharge"))
         )
         if has_battery:
-            entities.append(AjaxBatterySensor(coordinator, device))
+            entities.append(ConneeAlarmBatterySensor(coordinator, device))
 
         # Signal strength sensor: ALWAYS add (this was the main cause of “14 entities”) 
-        entities.append(AjaxSignalSensor(coordinator, device))
+        entities.append(ConneeAlarmSignalSensor(coordinator, device))
 
         # Temperature sensor:
         has_temp = (
@@ -97,17 +97,17 @@ async def async_setup_entry(
             or any(k in state for k in ("temperature", "temp"))
         )
         if has_temp:
-            entities.append(AjaxTemperatureSensor(coordinator, device))
+            entities.append(ConneeAlarmTemperatureSensor(coordinator, device))
 
     async_add_entities(entities)
 
 
-class AjaxSensor(CoordinatorEntity, SensorEntity):
-    """Ajax main sensor (generic status)."""
+class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
+    """Connee Alarm main sensor (generic status)."""
 
     _attr_has_entity_name = False
 
-    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -141,14 +141,14 @@ class AjaxSensor(CoordinatorEntity, SensorEntity):
         """Return extra attributes."""
         return {
             "device_type": self._device_type,
-            "ajax_id": self._device_id,
+            "connee_id": self._device_id,
             "name_candidate_deviceName": self._device.get("deviceName"),
             "name_candidate_name": self._device.get("name"),
         }
 
 
-class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
-    """Ajax battery sensor."""
+class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
+    """Connee Alarm battery sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "Batteria"
@@ -156,7 +156,7 @@ class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -174,56 +174,26 @@ class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
             model=self._device_type,
         )
 
-    def _coerce_int(self, val: Any) -> int | None:
-        """Try to coerce different value shapes into an int."""
-        if val is None:
-            return None
-        if isinstance(val, bool):
-            return None
-        if isinstance(val, (int, float)):
-            return int(val)
-        if isinstance(val, str):
-            try:
-                return int(float(val))
-            except (ValueError, TypeError):
-                return None
-        if isinstance(val, dict):
-            for k in ("value", "percent", "percentage", "level", "charge"):
-                if k in val:
-                    return self._coerce_int(val.get(k))
-        return None
-
     def _get_battery_value(self, data: dict) -> int | None:
         """Extract battery value from data dict, trying multiple field names."""
-        # Try direct fields (different Ajax payload variants)
-        for key in (
-            "batteryCharge",
-            "batteryLevel",
-            "batteryPercent",
-            "batteryPercentage",
-            "battery",
-            "battery_charge",
-            "battery_level",
-        ):
-            val = self._coerce_int(data.get(key))
+        # Try direct fields
+        for key in ("batteryCharge", "batteryLevel", "battery", "batteryPercent"):
+            val = data.get(key)
             if val is not None:
-                return val
-
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
         # Try nested battery object
         batt_obj = data.get("battery")
         if isinstance(batt_obj, dict):
-            for key in (
-                "charge",
-                "level",
-                "percent",
-                "percentage",
-                "value",
-                "chargePercentage",
-            ):
-                val = self._coerce_int(batt_obj.get(key))
+            for key in ("charge", "level", "percent", "percentage"):
+                val = batt_obj.get(key)
                 if val is not None:
-                    return val
-
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        pass
         return None
 
     @property
@@ -267,15 +237,15 @@ class AjaxBatterySensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class AjaxSignalSensor(CoordinatorEntity, SensorEntity):
-    """Ajax signal strength sensor."""
+class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
+    """Connee Alarm signal strength sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "Segnale"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:wifi"
 
-    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -295,42 +265,23 @@ class AjaxSignalSensor(CoordinatorEntity, SensorEntity):
 
     def _get_signal_value(self, data: dict) -> int | None:
         """Extract signal value from data dict, trying multiple field names."""
-        def coerce(val: Any) -> int | None:
-            if val is None or isinstance(val, bool):
-                return None
-            if isinstance(val, (int, float)):
-                return int(val)
-            if isinstance(val, str):
-                try:
-                    return int(float(val))
-                except (ValueError, TypeError):
-                    return None
-            if isinstance(val, dict):
-                for k in ("value", "level", "signal", "quality", "rssi"):
-                    if k in val:
-                        return coerce(val.get(k))
-            return None
-
-        for key in (
-            "signalLevel",
-            "signal",
-            "signalStrength",
-            "rssi",
-            "connectionQuality",
-            "linkQuality",
-        ):
-            val = coerce(data.get(key))
+        for key in ("signalLevel", "signal", "signalStrength", "rssi", "connectionQuality", "linkQuality"):
+            val = data.get(key)
             if val is not None:
-                return val
-
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
         # Try nested connection object
         conn_obj = data.get("connection")
         if isinstance(conn_obj, dict):
-            for key in ("signal", "level", "quality", "rssi", "value"):
-                val = coerce(conn_obj.get(key))
+            for key in ("signal", "level", "quality", "rssi"):
+                val = conn_obj.get(key)
                 if val is not None:
-                    return val
-
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        pass
         return None
 
     @property
@@ -375,8 +326,8 @@ class AjaxSignalSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class AjaxTemperatureSensor(CoordinatorEntity, SensorEntity):
-    """Ajax temperature sensor."""
+class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
+    """Connee Alarm temperature sensor."""
 
     _attr_has_entity_name = True
     _attr_name = "Temperatura"
@@ -385,7 +336,7 @@ class AjaxTemperatureSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:thermometer"
 
-    def __init__(self, coordinator: AjaxDataCoordinator, device: dict):
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
@@ -421,5 +372,5 @@ class AjaxTemperatureSensor(CoordinatorEntity, SensorEntity):
         """Return extra attributes."""
         return {
             "device_type": self._device_type,
-            "ajax_id": self._device_id,
+            "connee_id": self._device_id,
         }
