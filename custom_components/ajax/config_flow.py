@@ -10,7 +10,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DOMAIN, CONF_HUB_ID
-from .api import ConneeAlarmApiClient
+from .api import AjaxApiClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if len(self._hubs) == 1:
                         hub = self._hubs[0]
                         return self.async_create_entry(
-                            title=f"Connee Alarm - {hub.get('name', 'Hub')}",
+                        title=f"Ajax - {hub.get('name', 'Hub')}",
                             data={
                                 CONF_EMAIL: self._email,
                                 CONF_PASSWORD: self._password,
@@ -86,7 +86,7 @@ class AjaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             hub = next((h for h in self._hubs if h.get("id") == hub_id), self._hubs[0])
             
             return self.async_create_entry(
-                title=f"Connee Alarm - {hub.get('name', 'Hub')}",
+                title=f"Ajax - {hub.get('name', 'Hub')}",
                 data={
                     CONF_EMAIL: self._email,
                     CONF_PASSWORD: self._password,
