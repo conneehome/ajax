@@ -16,7 +16,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     """Register the Connee Alarm panel."""
     try:
         # Get the dashboard yaml path
-        dashboard_path = Path(__file__).parent / "lovelace" / "connee_alarm_dashboard.yaml"
+        dashboard_path = Path(__file__).parent / "lovelace" / "ajax_dashboard.yaml"
         
         if dashboard_path.exists():
             # Register as a lovelace dashboard

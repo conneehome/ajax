@@ -116,7 +116,7 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
 
         display_name = get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"connee_alarm_{self._device_id}_status"
+        self._attr_unique_id = f"ajax_{self._device_id}_status"
         self._attr_name = display_name
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
@@ -165,7 +165,7 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
 
         display_name = get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"connee_alarm_{self._device_id}_battery"
+        self._attr_unique_id = f"ajax_{self._device_id}_battery"
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},
@@ -174,25 +174,66 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
             model=self._device_type,
         )
 
+    def _get_battery_value(self, data: dict) -> int | None:
+        """Extract battery value from data dict, trying multiple field names."""
+        # Try direct fields
+        for key in ("batteryCharge", "batteryLevel", "battery", "batteryPercent"):
+            val = data.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
+        # Try nested battery object
+        batt_obj = data.get("battery")
+        if isinstance(batt_obj, dict):
+            for key in ("charge", "level", "percent", "percentage"):
+                val = batt_obj.get(key)
+                if val is not None:
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        pass
+        return None
+
     @property
     def native_value(self) -> int | None:
         """Return battery level."""
+        # First check device_states (updated data)
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
-        battery = state.get("battery", state.get("batteryLevel", state.get("batteryCharge")))
-        if battery is not None:
-            try:
-                return int(battery)
-            except (ValueError, TypeError):
-                return None
+        val = self._get_battery_value(state)
+        if val is not None:
+            return val
+
+        # Fallback to initial device data
+        val = self._get_battery_value(self._device)
+        if val is not None:
+            return val
+
+        # Try to find in devices list (in case device object was updated)
+        devices = self.coordinator.data.get("devices", [])
+        for d in devices:
+            if (d.get("id") or d.get("deviceId")) == self._device_id:
+                val = self._get_battery_value(d)
+                if val is not None:
+                    return val
+                break
+
         return None
 
     @property
     def extra_state_attributes(self) -> dict:
         """Return extra attributes."""
+        states = self.coordinator.data.get("device_states", {})
+        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
         return {
             "device_type": self._device_type,
             "connee_id": self._device_id,
+            "raw_battery_fields": {
+                k: state.get(k) for k in ("battery", "batteryCharge", "batteryLevel", "batteryPercent")
+                if state.get(k) is not None
+            },
         }
 
 
@@ -213,7 +254,7 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
 
         display_name = get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"connee_alarm_{self._device_id}_signal"
+        self._attr_unique_id = f"ajax_{self._device_id}_signal"
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},
@@ -222,17 +263,51 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
             model=self._device_type,
         )
 
+    def _get_signal_value(self, data: dict) -> int | None:
+        """Extract signal value from data dict, trying multiple field names."""
+        for key in ("signalLevel", "signal", "signalStrength", "rssi", "connectionQuality", "linkQuality"):
+            val = data.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
+        # Try nested connection object
+        conn_obj = data.get("connection")
+        if isinstance(conn_obj, dict):
+            for key in ("signal", "level", "quality", "rssi"):
+                val = conn_obj.get(key)
+                if val is not None:
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        pass
+        return None
+
     @property
     def native_value(self) -> int | None:
         """Return signal strength."""
+        # First check device_states (updated data)
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
-        signal = state.get("signal", state.get("signalLevel", state.get("signalStrength")))
-        if signal is not None:
-            try:
-                return int(signal)
-            except (ValueError, TypeError):
-                return None
+        val = self._get_signal_value(state)
+        if val is not None:
+            return val
+
+        # Fallback to initial device data
+        val = self._get_signal_value(self._device)
+        if val is not None:
+            return val
+
+        # Try to find in devices list
+        devices = self.coordinator.data.get("devices", [])
+        for d in devices:
+            if (d.get("id") or d.get("deviceId")) == self._device_id:
+                val = self._get_signal_value(d)
+                if val is not None:
+                    return val
+                break
+
         return None
 
     @property
@@ -244,6 +319,10 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
             "device_type": self._device_type,
             "connee_id": self._device_id,
             "online": state.get("online", state.get("isOnline", True)),
+            "raw_signal_fields": {
+                k: state.get(k) for k in ("signal", "signalLevel", "signalStrength", "rssi", "connectionQuality")
+                if state.get(k) is not None
+            },
         }
 
 
@@ -266,7 +345,7 @@ class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
 
         display_name = get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"connee_alarm_{self._device_id}_temperature"
+        self._attr_unique_id = f"ajax_{self._device_id}_temperature"
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},

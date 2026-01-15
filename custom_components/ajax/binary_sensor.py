@@ -97,7 +97,7 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
         display_name = _get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"connee_alarm_{self._device_id}"
+        self._attr_unique_id = f"ajax_{self._device_id}"
         self._attr_name = display_name
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
