@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import DOMAIN
 from .coordinator import ConneeAlarmDataCoordinator
 from .api import ConneeAlarmApiClient
+from .panel import async_register_panel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    
+    # Register sidebar dashboard panel
+    await async_register_panel(hass)
     
     return True
 

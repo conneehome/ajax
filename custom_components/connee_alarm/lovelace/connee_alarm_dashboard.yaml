@@ -5,16 +5,28 @@ views:
     icon: mdi:shield-home
     badges: []
     cards:
+      # Header with Connee Logo
+      - type: vertical-stack
+        cards:
+          - type: picture
+            image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
+            tap_action:
+              action: url
+              url_path: https://connee.it
+            hold_action:
+              action: none
+          
+          - type: markdown
+            content: |
+              # 🛡️ Sistema di Sicurezza
+              ---
+      
       # Alarm Control Panel - Main Card
       - type: vertical-stack
         cards:
-          - type: custom:mushroom-title-card
-            title: "🛡️ Connee Alarm"
-            subtitle: "Sistema di Sicurezza"
-          
           - type: alarm-panel
             entity: alarm_control_panel.connee_alarm
-            name: Allarme
+            name: Controllo Allarme
             states:
               - arm_away
               - arm_home
@@ -23,8 +35,8 @@ views:
       # Sensor Grid
       - type: vertical-stack
         cards:
-          - type: custom:mushroom-title-card
-            title: "📟 Sensori"
+          - type: markdown
+            content: "## 📟 Sensori"
             
           - type: grid
             columns: 2
@@ -46,8 +58,8 @@ views:
       # Battery Status
       - type: vertical-stack
         cards:
-          - type: custom:mushroom-title-card
-            title: "🔋 Stato Batterie"
+          - type: markdown
+            content: "## 🔋 Stato Batterie"
             
           - type: entities
             entities:
@@ -66,8 +78,8 @@ views:
       # Recent Events (requires logbook)
       - type: vertical-stack
         cards:
-          - type: custom:mushroom-title-card
-            title: "📜 Eventi Recenti"
+          - type: markdown
+            content: "## 📜 Eventi Recenti"
             
           - type: logbook
             entities:
@@ -94,6 +106,12 @@ views:
     path: settings
     icon: mdi:cog
     cards:
+      - type: picture
+        image: https://raw.githubusercontent.com/conneehome/ajax/main/assets/connee-logo.png
+        tap_action:
+          action: url
+          url_path: https://connee.it
+          
       - type: entities
         title: Configurazione
         entities:

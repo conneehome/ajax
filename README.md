@@ -37,7 +37,8 @@ Per richiedere l'attivazione, contatta il supporto Connee.
 
 1. Scarica lo ZIP da questo repository
 2. Estrai la cartella `custom_components/connee_alarm` nella tua cartella `config/custom_components/`
-3. Riavvia Home Assistant
+3. Copia la cartella `www/connee_alarm` nella tua cartella `config/www/` (per il logo)
+4. Riavvia Home Assistant
 
 ## ⚙️ Configurazione
 
@@ -54,10 +55,11 @@ Per richiedere l'attivazione, contatta il supporto Connee.
 
 Dopo l'installazione, troverai automaticamente un pannello **"Connee Alarm"** nella sidebar di Home Assistant con:
 
-- Controllo allarme (Arm Away, Arm Home, Arm Night, Disarm)
-- Griglia sensori con stati in tempo reale
-- Monitor batterie
-- Log eventi recenti
+- 🖼️ **Logo Connee** - Branding personalizzato
+- 🛡️ **Controllo allarme** - Arm Away, Arm Home, Arm Night, Disarm
+- 📟 **Griglia sensori** - Stati in tempo reale
+- 🔋 **Monitor batterie** - Avvisi batterie scariche
+- 📜 **Log eventi** - Ultimi 24h
 
 ## 🛡️ Dispositivi Supportati
 
