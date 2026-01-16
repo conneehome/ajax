@@ -64,4 +64,4 @@ views:
           - **Alarm entity:** alarm_control_panel.ajax
           - Sensori: cerca "ajax" in **Strumenti Sviluppatore → Stati**
           
-          **Versione:** 1.3.17
+          **Versione:** 1.3.18
