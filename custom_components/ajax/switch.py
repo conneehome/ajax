@@ -1,4 +1,9 @@
-"""Switch entities for Connee Alarm integration (Socket, WallSwitch, Relay)."""
+"""Switch entities for Connee Alarm (Socket, WallSwitch, Relay) - READ-ONLY.
+
+NOTE: The Ajax Enterprise API does NOT support switch control commands (returns 404).
+Socket/WallSwitch/Relay devices can only report their state, not be controlled remotely.
+These are implemented as SwitchEntity for UI consistency, but control methods log warnings.
+"""
 import logging
 from typing import Any
 
@@ -36,7 +41,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Connee Alarm switch entities (Socket, WallSwitch, Relay)."""
+    """Set up Connee Alarm switch entities (read-only status display)."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     api = data["api"]
@@ -55,12 +60,12 @@ async def async_setup_entry(
         if platform == "switch":
             entities.append(ConneeAlarmSwitch(coordinator, device, api))
 
-    _LOGGER.info("Setting up %d switch entities", len(entities))
+    _LOGGER.info("Setting up %d switch entities (read-only)", len(entities))
     async_add_entities(entities)
 
 
 class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
-    """Connee Alarm Socket/WallSwitch/Relay switch."""
+    """Connee Alarm Socket/WallSwitch/Relay (READ-ONLY - Ajax API does not support control)."""
 
     _attr_has_entity_name = False
     _attr_device_class = SwitchDeviceClass.OUTLET
@@ -104,24 +109,22 @@ class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
         return None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the switch on."""
-        _LOGGER.info("Turning on switch: %s", self._device_id)
-        success = await self._api.control_switch(self._device_id, True)
-        if success:
-            _LOGGER.info("Switch turned on successfully: %s", self._device_id)
-        else:
-            _LOGGER.error("Failed to turn on switch: %s", self._device_id)
-        await self.coordinator.async_request_refresh()
+        """Turn the switch on - NOT SUPPORTED by Ajax API."""
+        _LOGGER.warning(
+            "Cannot turn on switch %s: Ajax Enterprise API does not support remote control. "
+            "This switch is read-only.",
+            self._device_id
+        )
+        # Do not call API - it will fail with 404
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the switch off."""
-        _LOGGER.info("Turning off switch: %s", self._device_id)
-        success = await self._api.control_switch(self._device_id, False)
-        if success:
-            _LOGGER.info("Switch turned off successfully: %s", self._device_id)
-        else:
-            _LOGGER.error("Failed to turn off switch: %s", self._device_id)
-        await self.coordinator.async_request_refresh()
+        """Turn the switch off - NOT SUPPORTED by Ajax API."""
+        _LOGGER.warning(
+            "Cannot turn off switch %s: Ajax Enterprise API does not support remote control. "
+            "This switch is read-only.",
+            self._device_id
+        )
+        # Do not call API - it will fail with 404
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -132,11 +135,14 @@ class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
         attrs = {
             "device_type": self._device_type,
             "connee_id": self._device_id,
+            "read_only": True,
+            "control_note": "Ajax API does not support remote switch control",
         }
 
         # Socket/Relay specific attributes
         for k in ("switchState", "state", "powerState", "relayState", 
-                  "power", "voltage", "current", "energy", "extPower"):
+                  "power", "voltage", "current", "energy", "extPower",
+                  "batteryChargeLevelPercentage", "signalLevel", "firmwareVersion"):
             if k in state:
                 attrs[k] = state.get(k)
 

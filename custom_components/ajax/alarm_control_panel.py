@@ -82,18 +82,35 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
     def alarm_state(self) -> AlarmControlPanelState | None:
         """Return current alarm state."""
         hub_state = self.coordinator.data.get("hub_state", {})
-        arm_state = hub_state.get("armState", hub_state.get("state", "unknown"))
+        arm_state = str(hub_state.get("armState", hub_state.get("state", "unknown"))).upper()
         
-        state_map = {
-            "ARM": AlarmControlPanelState.ARMED_AWAY,
-            "ARMED": AlarmControlPanelState.ARMED_AWAY,
-            "PARTIAL_ARM": AlarmControlPanelState.ARMED_HOME,
-            "NIGHT_ARM": AlarmControlPanelState.ARMED_NIGHT,
-            "DISARM": AlarmControlPanelState.DISARMED,
-            "DISARMED": AlarmControlPanelState.DISARMED,
-        }
+        # Ajax returns various states:
+        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, ARMED_NIGHT_MODE_OFF, PARTIAL, etc.
         
-        return state_map.get(str(arm_state).upper(), AlarmControlPanelState.DISARMED)
+        # Check for ARMED variants (ARMED_NIGHT_MODE_OFF is still armed, just with night mode off)
+        if "ARMED" in arm_state and "DISARM" not in arm_state:
+            if "NIGHT_MODE_ON" in arm_state:
+                return AlarmControlPanelState.ARMED_NIGHT
+            elif "PARTIAL" in arm_state:
+                return AlarmControlPanelState.ARMED_HOME
+            else:
+                # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
+                return AlarmControlPanelState.ARMED_AWAY
+        
+        if "DISARM" in arm_state:
+            return AlarmControlPanelState.DISARMED
+        
+        if arm_state in ("ARM", "ARMED"):
+            return AlarmControlPanelState.ARMED_AWAY
+        
+        if "NIGHT" in arm_state:
+            return AlarmControlPanelState.ARMED_NIGHT
+            
+        if "PARTIAL" in arm_state:
+            return AlarmControlPanelState.ARMED_HOME
+        
+        # Default to disarmed for unknown states
+        return AlarmControlPanelState.DISARMED
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm."""

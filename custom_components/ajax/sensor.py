@@ -181,8 +181,8 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
 
     def _get_battery_value(self, data: dict) -> int | None:
         """Extract battery value from data dict, trying multiple field names."""
-        # Try direct fields
-        for key in ("batteryCharge", "batteryLevel", "battery", "batteryPercent"):
+        # Try direct fields - batteryChargeLevelPercentage is what Ajax API uses
+        for key in ("batteryChargeLevelPercentage", "batteryCharge", "batteryLevel", "battery", "batteryPercent"):
             val = data.get(key)
             if val is not None:
                 try:
@@ -236,7 +236,7 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
             "device_type": self._device_type,
             "connee_id": self._device_id,
             "raw_battery_fields": {
-                k: state.get(k) for k in ("battery", "batteryCharge", "batteryLevel", "batteryPercent")
+                k: state.get(k) for k in ("batteryChargeLevelPercentage", "battery", "batteryCharge", "batteryLevel", "batteryPercent")
                 if state.get(k) is not None
             },
         }

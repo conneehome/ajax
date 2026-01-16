@@ -180,10 +180,19 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             "name_candidate_name": self._device.get("name"),
         }
 
-        # Pass-through a few useful fields if present
-        for k in ("battery", "batteryLevel", "batteryCharge", "signal", "signalLevel", "signalStrength", 
-                  "online", "isOnline", "leakDetected", "leak", "floodDetected", "leakState", "sensorState",
-                  "smokeAlarmDetected", "temperatureAlarmDetected", "temperature", "reedClosed", "state"):
+        # Pass-through ALL useful fields if present
+        # Including Ajax-specific field names
+        useful_keys = (
+            "battery", "batteryLevel", "batteryCharge", "batteryChargeLevelPercentage",
+            "signal", "signalLevel", "signalStrength",
+            "online", "isOnline", "tampered",
+            "leakDetected", "leak", "floodDetected", "leakState", "sensorState",
+            "smokeAlarmDetected", "temperatureAlarmDetected", "coAlarmDetected",
+            "temperature", "reedClosed", "state",
+            "valveState", "switchState", "powerState",
+            "estimatedArmingState", "firmwareVersion"
+        )
+        for k in useful_keys:
             if k in state:
                 attrs[k] = state.get(k)
         

@@ -1,4 +1,8 @@
-"""Valve entities for Connee Alarm integration (WaterStop)."""
+"""Valve entities for Connee Alarm integration (WaterStop) - READ-ONLY.
+
+NOTE: The Ajax Enterprise API does NOT support valve control commands.
+WaterStop valves can only report their state (open/closed), not be controlled remotely.
+"""
 import logging
 from typing import Any
 
@@ -36,7 +40,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Connee Alarm valve entities (WaterStop)."""
+    """Set up Connee Alarm valve entities (WaterStop) - read-only."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     api = data["api"]
@@ -55,16 +59,17 @@ async def async_setup_entry(
         if platform == "valve":
             entities.append(ConneeAlarmValve(coordinator, device, api))
 
-    _LOGGER.info("Setting up %d valve entities", len(entities))
+    _LOGGER.info("Setting up %d valve entities (read-only)", len(entities))
     async_add_entities(entities)
 
 
 class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
-    """Connee Alarm WaterStop valve."""
+    """Connee Alarm WaterStop valve (READ-ONLY - Ajax API does not support control)."""
 
     _attr_has_entity_name = False
     _attr_device_class = ValveDeviceClass.WATER
-    _attr_supported_features = ValveEntityFeature.OPEN | ValveEntityFeature.CLOSE
+    # No supported_features = read-only entity (no Open/Close buttons in HA UI)
+    _attr_supported_features = ValveEntityFeature(0)
     _attr_reports_position = False
 
     def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict, api):
@@ -114,25 +119,9 @@ class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
         motor_state = state.get("motorState", "")
         return str(motor_state).upper() == "CLOSING"
 
-    async def async_open_valve(self) -> None:
-        """Open the valve."""
-        _LOGGER.info("Opening valve: %s", self._device_id)
-        success = await self._api.control_valve(self._device_id, "OPEN")
-        if success:
-            _LOGGER.info("Valve opened successfully: %s", self._device_id)
-        else:
-            _LOGGER.error("Failed to open valve: %s", self._device_id)
-        await self.coordinator.async_request_refresh()
-
-    async def async_close_valve(self) -> None:
-        """Close the valve."""
-        _LOGGER.info("Closing valve: %s", self._device_id)
-        success = await self._api.control_valve(self._device_id, "CLOSED")
-        if success:
-            _LOGGER.info("Valve closed successfully: %s", self._device_id)
-        else:
-            _LOGGER.error("Failed to close valve: %s", self._device_id)
-        await self.coordinator.async_request_refresh()
+    # NOTE: async_open_valve() and async_close_valve() intentionally NOT implemented.
+    # The Ajax Enterprise API returns 404 for valve control commands.
+    # WaterStop valves are read-only in Home Assistant.
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -143,11 +132,14 @@ class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
         attrs = {
             "device_type": self._device_type,
             "connee_id": self._device_id,
+            "read_only": True,
+            "control_note": "Ajax API does not support remote valve control",
         }
 
         # WaterStop specific attributes
         for k in ("valveState", "motorState", "tempProtectState", "extPower", 
-                  "preventionEnable", "preventionDaysPeriod", "errorDescriptions"):
+                  "preventionEnable", "preventionDaysPeriod", "errorDescriptions",
+                  "batteryChargeLevelPercentage", "signalLevel", "firmwareVersion"):
             if k in state:
                 attrs[k] = state.get(k)
 
