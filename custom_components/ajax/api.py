@@ -340,3 +340,48 @@ class ConneeAlarmApiClient:
         })
         return "error" not in result
 
+    async def control_valve(self, device_id: str, valve_state: str) -> bool:
+        """Control WaterStop valve (OPEN/CLOSED)."""
+        if not self.user_id or not self.hub_id:
+            _LOGGER.error("Cannot control valve: user_id or hub_id not set")
+            return False
+        
+        _LOGGER.info("Controlling valve %s: %s", device_id, valve_state)
+        
+        result = await self._call_gateway("control-valve", {
+            "userId": self.user_id,
+            "hubId": self.hub_id,
+            "targetDeviceId": device_id,
+            "valveState": valve_state,
+        })
+        
+        if isinstance(result, dict) and "error" in result:
+            _LOGGER.error("Valve control failed: %s", result.get("message", "Unknown error"))
+            return False
+        
+        _LOGGER.info("Valve control successful for %s", device_id)
+        return True
+
+    async def control_switch(self, device_id: str, switch_state: bool) -> bool:
+        """Control Socket/WallSwitch/Relay (ON/OFF)."""
+        if not self.user_id or not self.hub_id:
+            _LOGGER.error("Cannot control switch: user_id or hub_id not set")
+            return False
+        
+        state_str = "ON" if switch_state else "OFF"
+        _LOGGER.info("Controlling switch %s: %s", device_id, state_str)
+        
+        result = await self._call_gateway("control-switch", {
+            "userId": self.user_id,
+            "hubId": self.hub_id,
+            "targetDeviceId": device_id,
+            "switchState": state_str,
+        })
+        
+        if isinstance(result, dict) and "error" in result:
+            _LOGGER.error("Switch control failed: %s", result.get("message", "Unknown error"))
+            return False
+        
+        _LOGGER.info("Switch control successful for %s", device_id)
+        return True
+

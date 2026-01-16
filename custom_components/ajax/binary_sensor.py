@@ -124,11 +124,20 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if reed_closed is True:
             return False
 
-        # Leak sensors (LeaksProtect): leakDetected=true => LEAK => ON
-        leak_detected = state.get("leakDetected")
-        if leak_detected is True:
+        # Leak sensors (LeaksProtect): various possible field names
+        # Check multiple possible field names for leak detection
+        for leak_key in ("leakDetected", "leak", "floodDetected", "flood", "waterDetected", "water", "moistureDetected"):
+            leak_val = state.get(leak_key)
+            if leak_val is True:
+                return True
+            if leak_val is False:
+                return False
+        
+        # Some LeaksProtect might use state field with specific values
+        leak_state = state.get("leakState", state.get("sensorState", ""))
+        if str(leak_state).upper() in ("LEAK", "DETECTED", "FLOOD", "WET", "ALARM"):
             return True
-        if leak_detected is False:
+        if str(leak_state).upper() in ("DRY", "OK", "NORMAL", "PASSIVE"):
             return False
 
         # Smoke/Fire sensors: smokeAlarmDetected, temperatureAlarmDetected
@@ -172,8 +181,15 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         }
 
         # Pass-through a few useful fields if present
-        for k in ("battery", "batteryLevel", "batteryCharge", "signal", "signalLevel", "signalStrength", "online", "isOnline"):
+        for k in ("battery", "batteryLevel", "batteryCharge", "signal", "signalLevel", "signalStrength", 
+                  "online", "isOnline", "leakDetected", "leak", "floodDetected", "leakState", "sensorState",
+                  "smokeAlarmDetected", "temperatureAlarmDetected", "temperature", "reedClosed", "state"):
             if k in state:
                 attrs[k] = state.get(k)
+        
+        # Log raw state for debugging (only non-empty fields)
+        raw_state_summary = {k: v for k, v in state.items() if v is not None}
+        if raw_state_summary:
+            attrs["_raw_state_keys"] = list(raw_state_summary.keys())
 
         return attrs

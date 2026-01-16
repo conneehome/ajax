@@ -1,8 +1,8 @@
-"""Valve entities for Connee Alarm integration (WaterStop)."""
+"""Switch entities for Connee Alarm integration (Socket, WallSwitch, Relay)."""
 import logging
 from typing import Any
 
-from homeassistant.components.valve import ValveEntity, ValveDeviceClass, ValveEntityFeature
+from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -36,7 +36,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Connee Alarm valve entities (WaterStop)."""
+    """Set up Connee Alarm switch entities (Socket, WallSwitch, Relay)."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     api = data["api"]
@@ -52,20 +52,18 @@ async def async_setup_entry(
         device_type = _get_device_type(device)
         platform = DEVICE_TYPE_MAP.get(device_type)
 
-        if platform == "valve":
-            entities.append(ConneeAlarmValve(coordinator, device, api))
+        if platform == "switch":
+            entities.append(ConneeAlarmSwitch(coordinator, device, api))
 
-    _LOGGER.info("Setting up %d valve entities", len(entities))
+    _LOGGER.info("Setting up %d switch entities", len(entities))
     async_add_entities(entities)
 
 
-class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
-    """Connee Alarm WaterStop valve."""
+class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
+    """Connee Alarm Socket/WallSwitch/Relay switch."""
 
     _attr_has_entity_name = False
-    _attr_device_class = ValveDeviceClass.WATER
-    _attr_supported_features = ValveEntityFeature.OPEN | ValveEntityFeature.CLOSE
-    _attr_reports_position = False
+    _attr_device_class = SwitchDeviceClass.OUTLET
 
     def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict, api):
         """Initialize."""
@@ -77,7 +75,7 @@ class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
 
         display_name = _get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"ajax_{self._device_id}_valve"
+        self._attr_unique_id = f"ajax_{self._device_id}_switch"
         self._attr_name = display_name
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},
@@ -87,51 +85,42 @@ class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
         )
 
     @property
-    def is_closed(self) -> bool | None:
-        """Return true if valve is closed."""
+    def is_on(self) -> bool | None:
+        """Return true if switch is on."""
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
-        valve_state = state.get("valveState")
-        if valve_state is not None:
-            return str(valve_state).upper() == "CLOSED"
+        # Try various possible field names for switch state
+        for key in ("switchState", "state", "powerState", "relayState", "on"):
+            val = state.get(key)
+            if val is not None:
+                if isinstance(val, bool):
+                    return val
+                if isinstance(val, str):
+                    return val.upper() in ("ON", "TRUE", "1", "ENABLED")
+                if isinstance(val, (int, float)):
+                    return val > 0
 
         return None
 
-    @property
-    def is_opening(self) -> bool:
-        """Return true if valve is opening."""
-        states = self.coordinator.data.get("device_states", {})
-        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
-        motor_state = state.get("motorState", "")
-        return str(motor_state).upper() == "OPENING"
-
-    @property
-    def is_closing(self) -> bool:
-        """Return true if valve is closing."""
-        states = self.coordinator.data.get("device_states", {})
-        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
-        motor_state = state.get("motorState", "")
-        return str(motor_state).upper() == "CLOSING"
-
-    async def async_open_valve(self) -> None:
-        """Open the valve."""
-        _LOGGER.info("Opening valve: %s", self._device_id)
-        success = await self._api.control_valve(self._device_id, "OPEN")
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on."""
+        _LOGGER.info("Turning on switch: %s", self._device_id)
+        success = await self._api.control_switch(self._device_id, True)
         if success:
-            _LOGGER.info("Valve opened successfully: %s", self._device_id)
+            _LOGGER.info("Switch turned on successfully: %s", self._device_id)
         else:
-            _LOGGER.error("Failed to open valve: %s", self._device_id)
+            _LOGGER.error("Failed to turn on switch: %s", self._device_id)
         await self.coordinator.async_request_refresh()
 
-    async def async_close_valve(self) -> None:
-        """Close the valve."""
-        _LOGGER.info("Closing valve: %s", self._device_id)
-        success = await self._api.control_valve(self._device_id, "CLOSED")
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the switch off."""
+        _LOGGER.info("Turning off switch: %s", self._device_id)
+        success = await self._api.control_switch(self._device_id, False)
         if success:
-            _LOGGER.info("Valve closed successfully: %s", self._device_id)
+            _LOGGER.info("Switch turned off successfully: %s", self._device_id)
         else:
-            _LOGGER.error("Failed to close valve: %s", self._device_id)
+            _LOGGER.error("Failed to turn off switch: %s", self._device_id)
         await self.coordinator.async_request_refresh()
 
     @property
@@ -145,9 +134,9 @@ class ConneeAlarmValve(CoordinatorEntity, ValveEntity):
             "connee_id": self._device_id,
         }
 
-        # WaterStop specific attributes
-        for k in ("valveState", "motorState", "tempProtectState", "extPower", 
-                  "preventionEnable", "preventionDaysPeriod", "errorDescriptions"):
+        # Socket/Relay specific attributes
+        for k in ("switchState", "state", "powerState", "relayState", 
+                  "power", "voltage", "current", "energy", "extPower"):
             if k in state:
                 attrs[k] = state.get(k)
 
