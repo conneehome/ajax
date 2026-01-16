@@ -5,14 +5,9 @@ from typing import Any
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityFeature,
+    AlarmControlPanelState,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_ARMED_NIGHT,
-    STATE_ALARM_DISARMED,
-)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -84,21 +79,21 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         return False
 
     @property
-    def state(self) -> str:
-        """Return current state."""
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        """Return current alarm state."""
         hub_state = self.coordinator.data.get("hub_state", {})
         arm_state = hub_state.get("armState", hub_state.get("state", "unknown"))
         
         state_map = {
-            "ARM": STATE_ALARM_ARMED_AWAY,
-            "ARMED": STATE_ALARM_ARMED_AWAY,
-            "PARTIAL_ARM": STATE_ALARM_ARMED_HOME,
-            "NIGHT_ARM": STATE_ALARM_ARMED_NIGHT,
-            "DISARM": STATE_ALARM_DISARMED,
-            "DISARMED": STATE_ALARM_DISARMED,
+            "ARM": AlarmControlPanelState.ARMED_AWAY,
+            "ARMED": AlarmControlPanelState.ARMED_AWAY,
+            "PARTIAL_ARM": AlarmControlPanelState.ARMED_HOME,
+            "NIGHT_ARM": AlarmControlPanelState.ARMED_NIGHT,
+            "DISARM": AlarmControlPanelState.DISARMED,
+            "DISARMED": AlarmControlPanelState.DISARMED,
         }
         
-        return state_map.get(str(arm_state).upper(), STATE_ALARM_DISARMED)
+        return state_map.get(str(arm_state).upper(), AlarmControlPanelState.DISARMED)
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm."""
