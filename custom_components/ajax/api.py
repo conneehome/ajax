@@ -46,6 +46,7 @@ class ConneeAlarmApiClient:
         self._consecutive_failures = 0  # Track failures for exponential backoff
         self._last_error: Optional[str] = None  # Last error message for diagnostics
         self._connection_status: str = self.STATUS_DISCONNECTED
+        self._auth_failed: bool = False  # Track permanent auth failure for ConfigEntryAuthFailed
 
     @property
     def connection_status(self) -> str:
@@ -109,8 +110,9 @@ class ConneeAlarmApiClient:
         self,
         action: str,
         body: Optional[Dict] = None,
+        _retry_after_relogin: bool = False,
     ) -> Any:
-        """Call Connee Gateway API."""
+        """Call Connee Gateway API with automatic re-authentication on token errors."""
         # Check backoff before making requests
         if self._is_in_backoff():
             remaining = (self._backoff_until - datetime.now()).total_seconds()
@@ -142,9 +144,45 @@ class ConneeAlarmApiClient:
             ) as resp:
                 result = await resp.json()
 
-                # Handle rate limiting / auth errors with backoff
-                if resp.status in (401, 403, 429):
+                # Check for session token errors - attempt auto re-login
+                is_token_error = False
+                if isinstance(result, dict):
+                    error_msg_lower = str(result.get("message", "")).lower()
+                    error_lower = str(result.get("error", "")).lower()
+                    is_token_error = (
+                        "session token required" in error_msg_lower or
+                        "session token required" in error_lower or
+                        "unauthorized" in error_msg_lower or
+                        "invalid token" in error_msg_lower or
+                        "token expired" in error_msg_lower
+                    )
+
+                # Handle 401/403 or token errors with automatic re-login
+                if resp.status in (401, 403) or is_token_error:
                     error_msg = result.get("message", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
+                    
+                    # If we haven't already retried after re-login, attempt it now
+                    if not _retry_after_relogin and action != "login":
+                        _LOGGER.info(
+                            "Token/auth error detected (%s). Attempting automatic re-login...",
+                            error_msg
+                        )
+                        # Clear current token
+                        self.session_token = None
+                        self.token_expires = None
+                        
+                        # Attempt re-login
+                        login_success = await self.login()
+                        if login_success:
+                            _LOGGER.info("Re-login successful. Retrying original request: %s", action)
+                            # Retry the original request with new token
+                            return await self._call_gateway(action, body, _retry_after_relogin=True)
+                        else:
+                            _LOGGER.error("Re-login failed. Cannot complete request: %s", action)
+                            self._auth_failed = True  # Mark auth as permanently failed
+                            return {"error": 401, "message": "Re-login failed", "auth_failed": True}
+                    
+                    # Already retried or it's a login action - set backoff
                     self._last_error = f"{resp.status}: {error_msg}"
                     _LOGGER.error(
                         "Auth/rate limit error (HTTP %d): %s. Activating backoff.",
@@ -152,12 +190,21 @@ class ConneeAlarmApiClient:
                         result
                     )
                     self._set_backoff()
-                    return {"error": resp.status, "message": error_msg}
+                    return {"error": resp.status, "message": error_msg, "auth_failed": True}
+
+                # Handle rate limiting
+                if resp.status == 429:
+                    error_msg = result.get("message", "Rate limited") if isinstance(result, dict) else "Rate limited"
+                    self._last_error = f"429: {error_msg}"
+                    _LOGGER.error("Rate limit error (HTTP 429): %s. Activating backoff.", result)
+                    self._set_backoff()
+                    return {"error": 429, "message": error_msg}
 
                 if resp.status == 200 and isinstance(result, dict) and result.get("success"):
                     self._clear_backoff()  # Success - clear any backoff
                     self._last_error = None  # Clear error on success
                     self._connection_status = self.STATUS_CONNECTED
+                    self._auth_failed = False  # Clear auth failed flag on success
                     return result.get("data")
 
                 if isinstance(result, dict):
@@ -329,16 +376,24 @@ class ConneeAlarmApiClient:
             return []
         return result if isinstance(result, list) else result.get("data", [])
 
-    async def arm_hub(self, hub_id: str, arm_state: str) -> bool:
-        """Arm/disarm hub."""
+    async def arm_hub(self, hub_id: str, arm_state: str) -> tuple[bool, str]:
+        """Arm/disarm hub. Returns (success, error_message)."""
         if not self.user_id:
-            return False
+            return False, "User ID not set"
+        
         result = await self._call_gateway("arm-hub", {
             "userId": self.user_id,
             "hubId": hub_id,
             "armState": arm_state,
         })
-        return "error" not in result
+        
+        if isinstance(result, dict) and "error" in result:
+            error_msg = result.get("message", "Unknown error")
+            is_auth_failed = result.get("auth_failed", False)
+            _LOGGER.error("arm_hub failed: %s (auth_failed=%s)", error_msg, is_auth_failed)
+            return False, error_msg
+        
+        return True, ""
 
     async def control_valve(self, device_id: str, valve_state: str) -> bool:
         """Control WaterStop valve (OPEN/CLOSED)."""

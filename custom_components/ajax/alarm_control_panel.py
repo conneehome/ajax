@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import ConneeAlarmDataCoordinator
@@ -114,20 +115,28 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm."""
-        await self._api.arm_hub(self._hub_id, "DISARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "DISARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Arm the alarm in away mode."""
-        await self._api.arm_hub(self._hub_id, "ARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Arm the alarm in home mode."""
-        await self._api.arm_hub(self._hub_id, "PARTIAL_ARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "PARTIAL_ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
         """Arm the alarm in night mode."""
-        await self._api.arm_hub(self._hub_id, "NIGHT_ARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "NIGHT_ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
