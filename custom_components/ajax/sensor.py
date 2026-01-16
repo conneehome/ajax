@@ -94,7 +94,7 @@ async def async_setup_entry(
             entities.append(ConneeAlarmBatterySensor(coordinator, device))
 
         # Signal strength sensor: ALWAYS add (this was the main cause of “14 entities”) 
-        entities.append(ConneeAlarmSignalSensor(coordinator, device))
+        pass  # Signal sensor removed - not useful
 
         # Temperature sensor:
         has_temp = (
