@@ -46,12 +46,20 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
             # Get device states
             device_states = await self.api.get_device_states(self.hub_id)
             
-            # Map device states by ID
-            states_map = {}
-            for state in device_states:
-                device_id = state.get("deviceId") or state.get("id")
-                if device_id:
-                    states_map[device_id] = state
+            # Map device states by ID (normalize to string to avoid mismatches)
+            states_map: Dict[str, Any] = {}
+            if isinstance(device_states, list):
+                for state in device_states:
+                    raw_id = (
+                        state.get("deviceId")
+                        or state.get("id")
+                        or state.get("device_id")
+                        or (state.get("device") or {}).get("deviceId")
+                        or (state.get("device") or {}).get("id")
+                    )
+                    if raw_id is None:
+                        continue
+                    states_map[str(raw_id)] = state
 
             return {
                 "hub_state": hub_state,

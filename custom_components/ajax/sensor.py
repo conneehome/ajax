@@ -79,6 +79,12 @@ async def async_setup_entry(
 
     # Add diagnostic connection status sensor (always first)
     entities.append(ConneeAlarmConnectionSensor(coordinator, api, entry))
+    
+    # Add summary/count sensors for dashboard cards
+    entities.append(ConneeAlarmSensorCountSensor(coordinator, entry))
+    entities.append(ConneeAlarmSensorOkSensor(coordinator, entry))
+    entities.append(ConneeAlarmSensorAlarmSensor(coordinator, entry))
+    entities.append(ConneeAlarmSensorOfflineSensor(coordinator, entry))
 
 
     for device in devices:
@@ -378,3 +384,221 @@ class ConneeAlarmConnectionSensor(CoordinatorEntity, SensorEntity):
     def available(self) -> bool:
         """Always available so user can see status."""
         return True
+
+
+class ConneeAlarmSensorCountSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor counting total devices."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:counter"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"ajax_{entry.entry_id}_total_sensors"
+        self._attr_name = "Connee Sensori Totale"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
+            name="Connee Gateway",
+            manufacturer=MANUFACTURER,
+            model="Cloud Gateway",
+        )
+
+    @property
+    def native_value(self) -> int:
+        """Return total sensor count."""
+        devices = self.coordinator.data.get("devices", [])
+        # Exclude hubs from count
+        return sum(1 for d in devices if DEVICE_TYPE_MAP.get(_get_device_type(d)) != "alarm_control_panel")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return device breakdown."""
+        devices = self.coordinator.data.get("devices", [])
+        type_counts = {}
+        for d in devices:
+            dtype = _get_device_type(d)
+            type_counts[dtype] = type_counts.get(dtype, 0) + 1
+        return {"device_types": type_counts}
+
+
+class ConneeAlarmSensorOkSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor counting devices in OK state."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:check-circle"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"ajax_{entry.entry_id}_sensors_ok"
+        self._attr_name = "Connee Sensori OK"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
+            name="Connee Gateway",
+            manufacturer=MANUFACTURER,
+            model="Cloud Gateway",
+        )
+
+    @property
+    def native_value(self) -> int:
+        """Return count of OK sensors."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        count = 0
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            dtype = _get_device_type(d)
+            if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            # Check online status
+            is_online = state.get("online", state.get("isOnline", True))
+            if is_online is False:
+                continue
+            # Check not in alarm
+            if state.get("active") or state.get("triggered") or state.get("alarm"):
+                continue
+            if str(state.get("state", "")).upper() == "ALARM":
+                continue
+            count += 1
+        return count
+
+
+class ConneeAlarmSensorAlarmSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor counting devices in ALARM state."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:alert-circle"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"ajax_{entry.entry_id}_sensors_alarm"
+        self._attr_name = "Connee Sensori Allarme"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
+            name="Connee Gateway",
+            manufacturer=MANUFACTURER,
+            model="Cloud Gateway",
+        )
+
+    @property
+    def native_value(self) -> int:
+        """Return count of sensors in alarm state."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        count = 0
+        alarmed_devices = []
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            dtype = _get_device_type(d)
+            if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            # Check various alarm indicators
+            is_alarm = (
+                state.get("active") is True
+                or state.get("triggered") is True
+                or state.get("alarm") is True
+                or str(state.get("state", "")).upper() == "ALARM"
+                or str(state.get("alarmState", "")).upper() == "ALARM"
+                or state.get("reedClosed") is False  # Door open = alarm for door sensors
+                or state.get("leakDetected") is True
+                or state.get("smokeAlarmDetected") is True
+                or state.get("temperatureAlarmDetected") is True
+                or state.get("glassBreakDetected") is True
+            )
+            if is_alarm:
+                count += 1
+                alarmed_devices.append(d.get("deviceName") or d.get("name") or device_id)
+        return count
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return list of alarmed devices."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        alarmed = []
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            is_alarm = (
+                state.get("active") is True
+                or state.get("triggered") is True
+                or state.get("alarm") is True
+                or str(state.get("state", "")).upper() == "ALARM"
+                or state.get("reedClosed") is False
+                or state.get("leakDetected") is True
+                or state.get("smokeAlarmDetected") is True
+            )
+            if is_alarm:
+                alarmed.append(d.get("deviceName") or d.get("name") or device_id)
+        return {"alarmed_devices": alarmed}
+
+
+class ConneeAlarmSensorOfflineSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor counting OFFLINE devices."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:wifi-off"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"ajax_{entry.entry_id}_sensors_offline"
+        self._attr_name = "Connee Sensori Offline"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
+            name="Connee Gateway",
+            manufacturer=MANUFACTURER,
+            model="Cloud Gateway",
+        )
+
+    @property
+    def native_value(self) -> int:
+        """Return count of offline sensors."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        count = 0
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            dtype = _get_device_type(d)
+            if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            is_online = state.get("online", state.get("isOnline"))
+            if is_online is False:
+                count += 1
+        return count
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return list of offline devices."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        offline = []
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            if state.get("online", state.get("isOnline")) is False:
+                offline.append(d.get("deviceName") or d.get("name") or device_id)
+        return {"offline_devices": offline}

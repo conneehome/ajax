@@ -20,7 +20,13 @@ _LOGGER = logging.getLogger(__name__)
 
 def _get_device_type(device: dict) -> str:
     """Return a normalized device type string."""
-    raw = device.get("type") or device.get("deviceType") or ""
+    raw = (
+        device.get("type")
+        or device.get("deviceType")
+        or (device.get("device") or {}).get("type")
+        or (device.get("device") or {}).get("deviceType")
+        or ""
+    )
     raw = str(raw).strip()
 
     # Common aliases seen in Ajax payloads
@@ -63,6 +69,20 @@ def _get_display_name(device: dict, device_type: str) -> str:
         or device.get("device", {}).get("name")
         or device_type
     )
+def _get_device_id(device: dict) -> str | None:
+    """Extract device id from different Ajax payload shapes."""
+    raw_id = (
+        device.get("id")
+        or device.get("deviceId")
+        or device.get("device_id")
+        or (device.get("device") or {}).get("id")
+        or (device.get("device") or {}).get("deviceId")
+        or (device.get("device") or {}).get("device_id")
+    )
+    if raw_id is None:
+        return None
+    raw_id = str(raw_id).strip()
+    return raw_id or None
 
 
 async def async_setup_entry(
@@ -79,7 +99,7 @@ async def async_setup_entry(
     states = coordinator.data.get("device_states", {})
 
     for device in devices:
-        device_id = device.get("id") or device.get("deviceId")
+        device_id = _get_device_id(device)
         if not device_id:
             continue
 
@@ -96,6 +116,7 @@ async def async_setup_entry(
         if any(k in state for k in ("reedClosed", "openState", "magneticState", "contactState")):
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
 
+    _LOGGER.info("Setting up %d binary_sensor entities (devices=%d)", len(entities), len(devices))
     async_add_entities(entities)
 
 
@@ -109,7 +130,7 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
-        self._device_id = device.get("id") or device.get("deviceId")
+        self._device_id = _get_device_id(device)
         self._device_type = _get_device_type(device)
 
         display_name = _get_display_name(device, self._device_type)
