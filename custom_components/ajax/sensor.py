@@ -30,7 +30,23 @@ def _get_device_type(device: dict) -> str:
         "ReX2": "ReX 2",
     }
 
-    return aliases.get(raw, raw)
+    raw = aliases.get(raw, raw)
+
+    # Normalize common suffixes/variants from API (e.g. "DoorProtect Jeweller")
+    raw_clean = raw.replace("(", " ").replace(")", " ").replace("-", " ")
+    raw_clean = " ".join(raw_clean.split())
+    raw_lower = raw_clean.lower()
+
+    if raw_lower.startswith("doorprotect"):
+        if "fibra" in raw_lower:
+            return "DoorProtect Fibra"
+        if "plus" in raw_lower:
+            return "DoorProtect Plus"
+        if "g3" in raw_lower:
+            return "DoorProtect G3"
+        return "DoorProtect"
+
+    return raw_clean
 
 
 def get_display_name(device: dict, device_type: str) -> str:
@@ -241,94 +257,6 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
             },
         }
 
-
-class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
-    """Connee Alarm signal strength sensor."""
-
-    _attr_has_entity_name = True
-    _attr_name = "Segnale"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:wifi"
-
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
-        """Initialize."""
-        super().__init__(coordinator)
-        self._device = device
-        self._device_id = device.get("id") or device.get("deviceId")
-        self._device_type = _get_device_type(device)
-
-        display_name = get_display_name(device, self._device_type)
-
-        self._attr_unique_id = f"ajax_{self._device_id}_signal"
-        self._attr_manufacturer = MANUFACTURER
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, str(self._device_id))},
-            name=display_name,
-            manufacturer=MANUFACTURER,
-            model=self._device_type,
-        )
-
-    def _get_signal_value(self, data: dict) -> int | None:
-        """Extract signal value from data dict, trying multiple field names."""
-        for key in ("signalLevel", "signal", "signalStrength", "rssi", "connectionQuality", "linkQuality"):
-            val = data.get(key)
-            if val is not None:
-                try:
-                    return int(val)
-                except (ValueError, TypeError):
-                    pass
-        # Try nested connection object
-        conn_obj = data.get("connection")
-        if isinstance(conn_obj, dict):
-            for key in ("signal", "level", "quality", "rssi"):
-                val = conn_obj.get(key)
-                if val is not None:
-                    try:
-                        return int(val)
-                    except (ValueError, TypeError):
-                        pass
-        return None
-
-    @property
-    def native_value(self) -> int | None:
-        """Return signal strength."""
-        # First check device_states (updated data)
-        states = self.coordinator.data.get("device_states", {})
-        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
-        val = self._get_signal_value(state)
-        if val is not None:
-            return val
-
-        # Fallback to initial device data
-        val = self._get_signal_value(self._device)
-        if val is not None:
-            return val
-
-        # Try to find in devices list
-        devices = self.coordinator.data.get("devices", [])
-        for d in devices:
-            if (d.get("id") or d.get("deviceId")) == self._device_id:
-                val = self._get_signal_value(d)
-                if val is not None:
-                    return val
-                break
-
-        return None
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        """Return extra attributes."""
-        states = self.coordinator.data.get("device_states", {})
-        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
-        return {
-            "device_type": self._device_type,
-            "connee_id": self._device_id,
-            "online": state.get("online", state.get("isOnline", True)),
-            "raw_signal_fields": {
-                k: state.get(k) for k in ("signal", "signalLevel", "signalStrength", "rssi", "connectionQuality")
-                if state.get(k) is not None
-            },
-        }
 
 
 class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):

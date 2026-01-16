@@ -34,7 +34,23 @@ def _get_device_type(device: dict) -> str:
         "ReX2": "ReX 2",
     }
 
-    return aliases.get(raw, raw)
+    raw = aliases.get(raw, raw)
+
+    # Normalize common suffixes/variants from API (e.g. "DoorProtect Jeweller")
+    raw_clean = raw.replace("(", " ").replace(")", " ").replace("-", " ")
+    raw_clean = " ".join(raw_clean.split())
+    raw_lower = raw_clean.lower()
+
+    if raw_lower.startswith("doorprotect"):
+        if "fibra" in raw_lower:
+            return "DoorProtect Fibra"
+        if "plus" in raw_lower:
+            return "DoorProtect Plus"
+        if "g3" in raw_lower:
+            return "DoorProtect G3"
+        return "DoorProtect"
+
+    return raw_clean
 
 
 def _get_display_name(device: dict, device_type: str) -> str:
@@ -123,6 +139,27 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             return True
         if reed_closed is True:
             return False
+
+        # Door sensors: fallback field names (varies by model/API)
+        open_state = state.get("openState")
+        if open_state is not None:
+            if isinstance(open_state, bool):
+                return bool(open_state)
+            val = str(open_state).strip().upper()
+            if val in ("OPEN", "OPENED", "TRUE", "1", "ON"):
+                return True
+            if val in ("CLOSE", "CLOSED", "FALSE", "0", "OFF"):
+                return False
+
+        contact_state = state.get("contactState")
+        if contact_state is None:
+            contact_state = state.get("magneticState")
+        if contact_state is not None:
+            val = str(contact_state).strip().upper()
+            if val in ("OPEN", "OPENED"):
+                return True
+            if val in ("CLOSE", "CLOSED"):
+                return False
 
         # Leak sensors (LeaksProtect): various possible field names
         # Check multiple possible field names for leak detection
