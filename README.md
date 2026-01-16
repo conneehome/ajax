@@ -1,7 +1,7 @@
 # Connee Alarm - Integrazione Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.4-blue.svg)
 
 **Integrazione ufficiale Connee** - Sistema di sicurezza per Home Assistant.
 
@@ -87,6 +87,30 @@ automation:
       - service: alarm_control_panel.alarm_arm_away
         target:
           entity_id: alarm_control_panel.connee_alarm
+```
+
+## 🔔 Notifiche Push con Logo
+
+```yaml
+automation:
+  - alias: "Notifica allarme con logo Connee"
+    trigger:
+      - platform: state
+        entity_id: alarm_control_panel.connee_alarm
+        to: "triggered"
+    action:
+      - service: notify.mobile_app_your_phone
+        data:
+          title: "🚨 ALLARME CONNEE"
+          message: "Intrusione rilevata!"
+          data:
+            image: "https://raw.githubusercontent.com/conneehome/ajax/main/logo.png"
+            thumbnail: "https://raw.githubusercontent.com/conneehome/ajax/main/logo.png"
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
 ```
 
 ## 🐛 Problemi?

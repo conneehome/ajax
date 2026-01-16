@@ -16,6 +16,9 @@ DEFAULT_SCAN_INTERVAL = 10
 CONNEE_GATEWAY_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/ajax-api"
 TOKEN_REFRESH_INTERVAL = 600
 
+# Connee Logo URL for entity_picture (GitHub raw)
+CONNEE_LOGO_URL = "https://raw.githubusercontent.com/conneehome/ajax/main/logo.png"
+
 # ==============================================================================
 # AJAX FULL DEVICE CATALOG (2024-2025)
 # Keep this list updated when Ajax releases new devices.

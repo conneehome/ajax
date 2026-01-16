@@ -139,7 +139,7 @@ def _log_device_diagnostics(devices: list) -> None:
         )
 
 
-PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.VALVE, Platform.SWITCH]
+PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.VALVE, Platform.SWITCH, Platform.UPDATE]
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
