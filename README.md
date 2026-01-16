@@ -1,7 +1,7 @@
 # Connee Alarm - Integrazione Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.25-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.26-blue.svg)
 
 **Integrazione ufficiale Connee** - Sistema di sicurezza per Home Assistant.
 
