@@ -86,19 +86,24 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         arm_state = str(hub_state.get("armState", hub_state.get("state", "unknown"))).upper()
         
         # Ajax returns various states:
-        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, ARMED_NIGHT_MODE_OFF, PARTIAL, etc.
+        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, DISARMED_NIGHT_MODE_ON, PARTIAL, etc.
         
-        # Check for ARMED variants (ARMED_NIGHT_MODE_OFF is still armed, just with night mode off)
+        # CRITICAL: Check NIGHT_MODE_ON first - it can appear with both ARMED and DISARMED prefix
+        # "DISARMED_NIGHT_MODE_ON" means night mode is active (armed at night)
+        # "ARMED_NIGHT_MODE_ON" also means night mode is active
+        if "NIGHT_MODE_ON" in arm_state:
+            return AlarmControlPanelState.ARMED_NIGHT
+        
+        # Check for ARMED variants (without DISARM in the name)
         if "ARMED" in arm_state and "DISARM" not in arm_state:
-            if "NIGHT_MODE_ON" in arm_state:
-                return AlarmControlPanelState.ARMED_NIGHT
-            elif "PARTIAL" in arm_state:
+            if "PARTIAL" in arm_state:
                 return AlarmControlPanelState.ARMED_HOME
             else:
                 # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
                 return AlarmControlPanelState.ARMED_AWAY
         
-        if "DISARM" in arm_state:
+        # Only pure DISARMED state (not DISARMED_NIGHT_MODE_ON which was caught above)
+        if arm_state == "DISARMED" or arm_state == "DISARM":
             return AlarmControlPanelState.DISARMED
         
         if arm_state in ("ARM", "ARMED"):
@@ -109,6 +114,10 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
             
         if "PARTIAL" in arm_state:
             return AlarmControlPanelState.ARMED_HOME
+        
+        # Fallback for other DISARM variants
+        if "DISARM" in arm_state:
+            return AlarmControlPanelState.DISARMED
         
         # Default to disarmed for unknown states
         return AlarmControlPanelState.DISARMED
