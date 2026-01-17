@@ -110,6 +110,10 @@ class ConneeAlarmHubUpdate(CoordinatorEntity, UpdateEntity):
     def installed_version(self) -> str | None:
         """Return the current firmware version."""
         hub_state = self.coordinator.data.get("hub_state", {})
+        # Ajax API returns firmware as nested object: { firmware: { version: "..." } }
+        firmware_obj = hub_state.get("firmware", {})
+        if isinstance(firmware_obj, dict) and firmware_obj.get("version"):
+            return firmware_obj.get("version")
         return hub_state.get("firmwareVersion") or hub_state.get("firmware_version")
 
     @property
