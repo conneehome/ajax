@@ -86,38 +86,31 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         arm_state = str(hub_state.get("armState", hub_state.get("state", "unknown"))).upper()
         
         # Ajax returns various states:
-        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, DISARMED_NIGHT_MODE_ON, PARTIAL, etc.
+        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, DISARMED_NIGHT_MODE_ON,
+        # DISARMED_NIGHT_MODE_OFF, PARTIAL, etc.
         
-        # CRITICAL: Check NIGHT_MODE_ON first - it can appear with both ARMED and DISARMED prefix
-        # "DISARMED_NIGHT_MODE_ON" means night mode is active (armed at night)
-        # "ARMED_NIGHT_MODE_ON" also means night mode is active
+        # Precedence matters:
+        # 1) NIGHT_MODE_ON can appear with both ARMED_ and DISARMED_ prefix
+        # 2) Any DISARM* state that is NOT NIGHT_MODE_ON must map to DISARMED
+        #    (e.g. DISARMED_NIGHT_MODE_OFF)
+        # 3) PARTIAL
+        # 4) ARMED/ARM
+        # 5) NIGHT fallback (but ignore NIGHT_MODE_OFF)
         if "NIGHT_MODE_ON" in arm_state:
             return AlarmControlPanelState.ARMED_NIGHT
         
-        # Check for ARMED variants (without DISARM in the name)
-        if "ARMED" in arm_state and "DISARM" not in arm_state:
-            if "PARTIAL" in arm_state:
-                return AlarmControlPanelState.ARMED_HOME
-            else:
-                # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
-                return AlarmControlPanelState.ARMED_AWAY
-        
-        # Only pure DISARMED state (not DISARMED_NIGHT_MODE_ON which was caught above)
-        if arm_state == "DISARMED" or arm_state == "DISARM":
+        if "DISARM" in arm_state:
             return AlarmControlPanelState.DISARMED
         
-        if arm_state in ("ARM", "ARMED"):
-            return AlarmControlPanelState.ARMED_AWAY
-        
-        if "NIGHT" in arm_state:
-            return AlarmControlPanelState.ARMED_NIGHT
-            
         if "PARTIAL" in arm_state:
             return AlarmControlPanelState.ARMED_HOME
         
-        # Fallback for other DISARM variants
-        if "DISARM" in arm_state:
-            return AlarmControlPanelState.DISARMED
+        if arm_state in ("ARM", "ARMED") or ("ARMED" in arm_state and "DISARM" not in arm_state):
+            # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
+            return AlarmControlPanelState.ARMED_AWAY
+        
+        if "NIGHT" in arm_state and "NIGHT_MODE_OFF" not in arm_state:
+            return AlarmControlPanelState.ARMED_NIGHT
         
         # Default to disarmed for unknown states
         return AlarmControlPanelState.DISARMED
