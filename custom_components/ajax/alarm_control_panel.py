@@ -84,22 +84,34 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         hub_state = self.coordinator.data.get("hub_state", {})
         arm_state = str(hub_state.get("armState", hub_state.get("state", "unknown"))).upper()
         
-        # Ajax returns various states:
-        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, ARMED_NIGHT_MODE_OFF, PARTIAL, etc.
+        _LOGGER.debug("Raw arm_state from API: %s", arm_state)
         
-        # Check for ARMED variants (ARMED_NIGHT_MODE_OFF is still armed, just with night mode off)
+        # Ajax returns combined states like:
+        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, ARMED_NIGHT_MODE_OFF, 
+        # DISARMED_NIGHT_MODE_ON, DISARMED_NIGHT_MODE_OFF, PARTIAL, etc.
+        
+        # PRIORITY 1: Check for NIGHT_MODE_ON first (regardless of armed/disarmed prefix)
+        # When night mode is ON, we show ARMED_NIGHT in HA
+        if "NIGHT_MODE_ON" in arm_state:
+            _LOGGER.debug("Detected NIGHT_MODE_ON -> ARMED_NIGHT")
+            return AlarmControlPanelState.ARMED_NIGHT
+        
+        # PRIORITY 2: Check for ARMED states (excluding night mode which was handled above)
         if "ARMED" in arm_state and "DISARM" not in arm_state:
-            if "NIGHT_MODE_ON" in arm_state:
-                return AlarmControlPanelState.ARMED_NIGHT
-            elif "PARTIAL" in arm_state:
+            if "PARTIAL" in arm_state:
+                _LOGGER.debug("Detected ARMED_PARTIAL -> ARMED_HOME")
                 return AlarmControlPanelState.ARMED_HOME
             else:
-                # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
+                # ARMED, ARMED_NIGHT_MODE_OFF = armed away
+                _LOGGER.debug("Detected ARMED -> ARMED_AWAY")
                 return AlarmControlPanelState.ARMED_AWAY
         
+        # PRIORITY 3: Check for DISARMED states
         if "DISARM" in arm_state:
+            _LOGGER.debug("Detected DISARMED -> DISARMED")
             return AlarmControlPanelState.DISARMED
         
+        # Fallback checks
         if arm_state in ("ARM", "ARMED"):
             return AlarmControlPanelState.ARMED_AWAY
         
@@ -110,6 +122,7 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
             return AlarmControlPanelState.ARMED_HOME
         
         # Default to disarmed for unknown states
+        _LOGGER.warning("Unknown arm_state '%s', defaulting to DISARMED", arm_state)
         return AlarmControlPanelState.DISARMED
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:

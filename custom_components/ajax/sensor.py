@@ -134,6 +134,10 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> str:
         """Return sensor value."""
+        # Safe check for coordinator.data being None
+        if self.coordinator.data is None:
+            return "unknown"
+            
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
@@ -204,6 +208,10 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> int | None:
         """Return battery level."""
+        # Safe check for coordinator.data being None
+        if self.coordinator.data is None:
+            return None
+            
         # First check device_states (updated data)
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
@@ -230,6 +238,10 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         """Return extra attributes."""
+        # Safe check for coordinator.data being None
+        if self.coordinator.data is None:
+            return {"device_type": self._device_type, "connee_id": self._device_id}
+            
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
         return {
@@ -270,9 +282,27 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
 
     def _get_signal_value(self, data: dict) -> int | None:
         """Extract signal value from data dict, trying multiple field names."""
+        # Ajax API returns signalLevel as string: STRONG, GOOD, WEAK, etc.
+        # We need to convert to percentage for display
+        signal_string_map = {
+            "STRONG": 100,
+            "GOOD": 75,
+            "NORMAL": 60,
+            "FAIR": 50,
+            "WEAK": 25,
+            "POOR": 10,
+            "CRITICAL": 5,
+        }
+        
         for key in ("signalLevel", "signal", "signalStrength", "rssi", "connectionQuality", "linkQuality"):
             val = data.get(key)
             if val is not None:
+                # First try string mapping (Ajax API format)
+                if isinstance(val, str):
+                    mapped = signal_string_map.get(val.upper())
+                    if mapped is not None:
+                        return mapped
+                # Then try numeric conversion
                 try:
                     return int(val)
                 except (ValueError, TypeError):
@@ -283,6 +313,10 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
             for key in ("signal", "level", "quality", "rssi"):
                 val = conn_obj.get(key)
                 if val is not None:
+                    if isinstance(val, str):
+                        mapped = signal_string_map.get(val.upper())
+                        if mapped is not None:
+                            return mapped
                     try:
                         return int(val)
                     except (ValueError, TypeError):
@@ -292,6 +326,10 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> int | None:
         """Return signal strength."""
+        # Safe check for coordinator.data being None
+        if self.coordinator.data is None:
+            return None
+            
         # First check device_states (updated data)
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
@@ -318,6 +356,10 @@ class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         """Return extra attributes."""
+        # Safe check for coordinator.data being None
+        if self.coordinator.data is None:
+            return {"device_type": self._device_type, "connee_id": self._device_id}
+            
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
         return {
@@ -362,6 +404,10 @@ class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         """Return temperature."""
+        # Safe check for coordinator.data being None
+        if self.coordinator.data is None:
+            return None
+            
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
         temp = state.get("temperature", state.get("temp"))
