@@ -106,9 +106,12 @@ async def async_setup_entry(
 
 
 class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
-    """Connee Alarm binary sensor."""
+    """Connee Alarm binary sensor (state entity grouped with device)."""
 
-    _attr_has_entity_name = False
+    # has_entity_name=True means HA will compose the name as "DeviceName + EntityName"
+    # This groups the binary_sensor with battery/signal sensors under the same device
+    _attr_has_entity_name = True
+    _attr_name = "Stato"  # Will appear as "DeviceName Stato"
 
     def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
@@ -119,16 +122,17 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
         display_name = _get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"connee_alarm_{self._device_id}"
-        self._attr_name = display_name
+        # unique_id must include "_state" suffix to differentiate from other entities
+        self._attr_unique_id = f"connee_alarm_{self._device_id}_state"
         self._attr_manufacturer = MANUFACTURER
+        
+        # CRITICAL: Same identifiers as battery/signal sensors = grouped under same device
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},
             name=display_name,
             manufacturer=MANUFACTURER,
             model=self._device_type,
         )
-
         # Some device types (e.g. Button/DoubleButton) don't have a valid
         # BinarySensorDeviceClass. Never crash platform setup because of this.
         device_class = DEVICE_CLASS_MAP.get(self._device_type)
