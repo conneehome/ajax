@@ -127,15 +127,15 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
-        """Arm the alarm in home/partial mode."""
-        _LOGGER.info("Sending ARM_PARTIAL command to hub %s", self._hub_id)
-        result = await self._api.arm_hub(self._hub_id, "ARM_PARTIAL")
-        _LOGGER.info("ARM_PARTIAL command result: %s", result)
+        """Arm the alarm in home/partial mode (maps to standard ARM)."""
+        _LOGGER.info("Sending ARM (home mode) command to hub %s", self._hub_id)
+        result = await self._api.arm_hub(self._hub_id, "ARM")
+        _LOGGER.info("ARM (home mode) command result: %s", result)
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
-        """Arm the alarm in night mode."""
-        _LOGGER.info("Sending ARM_NIGHT command to hub %s", self._hub_id)
-        result = await self._api.arm_hub(self._hub_id, "ARM_NIGHT")
-        _LOGGER.info("ARM_NIGHT command result: %s", result)
+        """Arm the alarm in night mode (uses NIGHT_MODE_ON)."""
+        _LOGGER.info("Sending NIGHT_MODE_ON command to hub %s", self._hub_id)
+        result = await self._api.arm_hub(self._hub_id, "NIGHT_MODE_ON")
+        _LOGGER.info("NIGHT_MODE_ON command result: %s", result)
         await self.coordinator.async_request_refresh()
