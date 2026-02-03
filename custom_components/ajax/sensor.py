@@ -30,23 +30,7 @@ def _get_device_type(device: dict) -> str:
         "ReX2": "ReX 2",
     }
 
-    raw = aliases.get(raw, raw)
-
-    # Normalize common suffixes/variants from API (e.g. "DoorProtect Jeweller")
-    raw_clean = raw.replace("(", " ").replace(")", " ").replace("-", " ")
-    raw_clean = " ".join(raw_clean.split())
-    raw_lower = raw_clean.lower()
-
-    if raw_lower.startswith("doorprotect"):
-        if "fibra" in raw_lower:
-            return "DoorProtect Fibra"
-        if "plus" in raw_lower:
-            return "DoorProtect Plus"
-        if "g3" in raw_lower:
-            return "DoorProtect G3"
-        return "DoorProtect"
-
-    return raw_clean
+    return aliases.get(raw, raw)
 
 
 def get_display_name(device: dict, device_type: str) -> str:
@@ -61,22 +45,6 @@ def get_display_name(device: dict, device_type: str) -> str:
     if display_name == device_type and device.get("deviceName"):
         display_name = device.get("deviceName")
     return str(display_name)
-
-
-def _get_device_id(device: dict) -> str | None:
-    """Extract device id from different Ajax payload shapes."""
-    raw_id = (
-        device.get("id")
-        or device.get("deviceId")
-        or device.get("device_id")
-        or (device.get("device") or {}).get("id")
-        or (device.get("device") or {}).get("deviceId")
-        or (device.get("device") or {}).get("device_id")
-    )
-    if raw_id is None:
-        return None
-    raw_id = str(raw_id).strip()
-    return raw_id or None
 
 
 async def async_setup_entry(
@@ -95,16 +63,10 @@ async def async_setup_entry(
 
     # Add diagnostic connection status sensor (always first)
     entities.append(ConneeAlarmConnectionSensor(coordinator, api, entry))
-    
-    # Add summary/count sensors for dashboard cards
-    entities.append(ConneeAlarmSensorCountSensor(coordinator, entry))
-    entities.append(ConneeAlarmSensorOkSensor(coordinator, entry))
-    entities.append(ConneeAlarmSensorAlarmSensor(coordinator, entry))
-    entities.append(ConneeAlarmSensorOfflineSensor(coordinator, entry))
 
 
     for device in devices:
-        device_id = _get_device_id(device)
+        device_id = device.get("id") or device.get("deviceId")
         if not device_id:
             continue
 
@@ -115,9 +77,10 @@ async def async_setup_entry(
         if platform == "alarm_control_panel":
             continue
 
-        # Sensore "Stato" descrittivo: SEMPRE per tutti i dispositivi
-        # (fornisce stati leggibili: Aperto/Chiuso, Bagnato/Asciutto, ecc.)
-        entities.append(ConneeAlarmSensor(coordinator, device))
+        # Main sensor: create it for anything that is NOT a binary_sensor
+        # (includes sensor types, switches/lights we don't control yet, and unknown devices)
+        if platform != "binary_sensor":
+            entities.append(ConneeAlarmSensor(coordinator, device))
 
         # Battery sensor:
         # - always add for battery-powered devices
@@ -131,7 +94,7 @@ async def async_setup_entry(
             entities.append(ConneeAlarmBatterySensor(coordinator, device))
 
         # Signal strength sensor: ALWAYS add (this was the main cause of “14 entities”) 
-        pass  # Signal sensor removed - not useful
+        entities.append(ConneeAlarmSignalSensor(coordinator, device))
 
         # Temperature sensor:
         has_temp = (
@@ -145,7 +108,7 @@ async def async_setup_entry(
 
 
 class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
-    """Sensore di stato con testi descrittivi in italiano."""
+    """Connee Alarm main sensor (generic status)."""
 
     _attr_has_entity_name = False
 
@@ -153,7 +116,7 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
-        self._device_id = _get_device_id(device)
+        self._device_id = device.get("id") or device.get("deviceId")
         self._device_type = _get_device_type(device)
 
         display_name = get_display_name(device, self._device_type)
@@ -170,105 +133,22 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Determina lo stato testuale in base al tipo di sensore."""
+        """Return sensor value."""
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
-        # 1. Controllo Online
-        is_online = state.get("online", state.get("isOnline", True))
-        if is_online is False:
-            return "Scollegato"
-
-        # 2. Sensori Allagamento (Leaks)
-        for leak_key in ("leakDetected", "floodDetected", "waterDetected"):
-            if state.get(leak_key) is True:
-                return "Bagnato"
-        if "leakState" in state:
-            ls = str(state.get("leakState")).upper()
-            if ls in ("LEAK", "FLOOD", "ALARM"):
-                return "Bagnato"
-            if ls in ("DRY", "OK"):
-                return "Asciutto"
-
-        # 3. Sensori Porta/Finestra (Contact)
-        reed = state.get("reedClosed")
-        if reed is False:
-            return "Aperto"
-        if reed is True:
-            return "Chiuso"
-        
-        open_st = state.get("openState")
-        if open_st is not None:
-            return "Aperto" if open_st else "Chiuso"
-
-        # 4. Sensori Fumo/Temperatura (Fire)
-        if state.get("smokeAlarmDetected") is True:
-            return "Fumo Rilevato"
-        if state.get("temperatureAlarmDetected") is True:
-            return "Calore Elevato"
-
-        # 5. Sensori Movimento
-        if str(state.get("state", "")).upper() == "ALARM":
-            return "Movimento"
-
-        # 6. Sensori Rottura Vetro
-        if state.get("glassBreakDetected") is True:
-            return "Vetro Rotto"
-
-        # 7. Valvole acqua
-        valve_state = state.get("valveState")
-        if valve_state is not None:
-            vs = str(valve_state).upper()
-            if vs == "CLOSED":
-                return "Valvola Chiusa"
-            if vs == "OPEN":
-                return "Valvola Aperta"
-
-        # Fallback Generico
-        if state.get("triggered") or state.get("alarm") or state.get("active"):
-            return "Allarme"
-            
-        return "OK"
-
-    @property
-    def icon(self) -> str:
-        """Cambia icona in base allo stato."""
-        val = self.native_value
-        if val == "Scollegato":
-            return "mdi:wifi-off"
-        if val == "Bagnato":
-            return "mdi:water-alert"
-        if val == "Asciutto":
-            return "mdi:water-check"
-        if val == "Aperto":
-            return "mdi:door-open"
-        if val == "Chiuso":
-            return "mdi:door-closed"
-        if val == "Fumo Rilevato":
-            return "mdi:fire-alert"
-        if val == "Calore Elevato":
-            return "mdi:thermometer-alert"
-        if val == "Movimento":
-            return "mdi:motion-sensor"
-        if val == "Vetro Rotto":
-            return "mdi:glass-fragile"
-        if val == "Valvola Chiusa":
-            return "mdi:valve-closed"
-        if val == "Valvola Aperta":
-            return "mdi:valve-open"
-        if val == "Allarme":
-            return "mdi:alert-circle"
-        return "mdi:check-circle"
+        if state.get("active", state.get("triggered", False)):
+            return "triggered"
+        return "ok"
 
     @property
     def extra_state_attributes(self) -> dict:
         """Return extra attributes."""
-        states = self.coordinator.data.get("device_states", {})
-        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
         return {
             "device_type": self._device_type,
             "connee_id": self._device_id,
-            "raw_state": state,
+            "name_candidate_deviceName": self._device.get("deviceName"),
+            "name_candidate_name": self._device.get("name"),
         }
 
 
@@ -285,7 +165,7 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
-        self._device_id = _get_device_id(device)
+        self._device_id = device.get("id") or device.get("deviceId")
         self._device_type = _get_device_type(device)
 
         display_name = get_display_name(device, self._device_type)
@@ -339,7 +219,7 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
         # Try to find in devices list (in case device object was updated)
         devices = self.coordinator.data.get("devices", [])
         for d in devices:
-            if _get_device_id(d) == self._device_id:
+            if (d.get("id") or d.get("deviceId")) == self._device_id:
                 val = self._get_battery_value(d)
                 if val is not None:
                     return val
@@ -362,6 +242,94 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
         }
 
 
+class ConneeAlarmSignalSensor(CoordinatorEntity, SensorEntity):
+    """Connee Alarm signal strength sensor."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Segnale"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:wifi"
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._device = device
+        self._device_id = device.get("id") or device.get("deviceId")
+        self._device_type = _get_device_type(device)
+
+        display_name = get_display_name(device, self._device_type)
+
+        self._attr_unique_id = f"ajax_{self._device_id}_signal"
+        self._attr_manufacturer = MANUFACTURER
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            name=display_name,
+            manufacturer=MANUFACTURER,
+            model=self._device_type,
+        )
+
+    def _get_signal_value(self, data: dict) -> int | None:
+        """Extract signal value from data dict, trying multiple field names."""
+        for key in ("signalLevel", "signal", "signalStrength", "rssi", "connectionQuality", "linkQuality"):
+            val = data.get(key)
+            if val is not None:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
+        # Try nested connection object
+        conn_obj = data.get("connection")
+        if isinstance(conn_obj, dict):
+            for key in ("signal", "level", "quality", "rssi"):
+                val = conn_obj.get(key)
+                if val is not None:
+                    try:
+                        return int(val)
+                    except (ValueError, TypeError):
+                        pass
+        return None
+
+    @property
+    def native_value(self) -> int | None:
+        """Return signal strength."""
+        # First check device_states (updated data)
+        states = self.coordinator.data.get("device_states", {})
+        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
+        val = self._get_signal_value(state)
+        if val is not None:
+            return val
+
+        # Fallback to initial device data
+        val = self._get_signal_value(self._device)
+        if val is not None:
+            return val
+
+        # Try to find in devices list
+        devices = self.coordinator.data.get("devices", [])
+        for d in devices:
+            if (d.get("id") or d.get("deviceId")) == self._device_id:
+                val = self._get_signal_value(d)
+                if val is not None:
+                    return val
+                break
+
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return extra attributes."""
+        states = self.coordinator.data.get("device_states", {})
+        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
+        return {
+            "device_type": self._device_type,
+            "connee_id": self._device_id,
+            "online": state.get("online", state.get("isOnline", True)),
+            "raw_signal_fields": {
+                k: state.get(k) for k in ("signal", "signalLevel", "signalStrength", "rssi", "connectionQuality")
+                if state.get(k) is not None
+            },
+        }
+
 
 class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
     """Connee Alarm temperature sensor."""
@@ -377,7 +345,7 @@ class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
-        self._device_id = _get_device_id(device)
+        self._device_id = device.get("id") or device.get("deviceId")
         self._device_type = _get_device_type(device)
 
         display_name = get_display_name(device, self._device_type)
@@ -482,221 +450,3 @@ class ConneeAlarmConnectionSensor(CoordinatorEntity, SensorEntity):
     def available(self) -> bool:
         """Always available so user can see status."""
         return True
-
-
-class ConneeAlarmSensorCountSensor(CoordinatorEntity, SensorEntity):
-    """Diagnostic sensor counting total devices."""
-
-    _attr_has_entity_name = False
-    _attr_icon = "mdi:counter"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
-        """Initialize."""
-        super().__init__(coordinator)
-        self._entry = entry
-        self._attr_unique_id = f"ajax_{entry.entry_id}_total_sensors"
-        self._attr_name = "Connee Sensori Totale"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
-            name="Connee Gateway",
-            manufacturer=MANUFACTURER,
-            model="Cloud Gateway",
-        )
-
-    @property
-    def native_value(self) -> int:
-        """Return total sensor count."""
-        devices = self.coordinator.data.get("devices", [])
-        # Exclude hubs from count
-        return sum(1 for d in devices if DEVICE_TYPE_MAP.get(_get_device_type(d)) != "alarm_control_panel")
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        """Return device breakdown."""
-        devices = self.coordinator.data.get("devices", [])
-        type_counts = {}
-        for d in devices:
-            dtype = _get_device_type(d)
-            type_counts[dtype] = type_counts.get(dtype, 0) + 1
-        return {"device_types": type_counts}
-
-
-class ConneeAlarmSensorOkSensor(CoordinatorEntity, SensorEntity):
-    """Diagnostic sensor counting devices in OK state."""
-
-    _attr_has_entity_name = False
-    _attr_icon = "mdi:check-circle"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
-        """Initialize."""
-        super().__init__(coordinator)
-        self._entry = entry
-        self._attr_unique_id = f"ajax_{entry.entry_id}_sensors_ok"
-        self._attr_name = "Connee Sensori OK"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
-            name="Connee Gateway",
-            manufacturer=MANUFACTURER,
-            model="Cloud Gateway",
-        )
-
-    @property
-    def native_value(self) -> int:
-        """Return count of OK sensors."""
-        devices = self.coordinator.data.get("devices", [])
-        states = self.coordinator.data.get("device_states", {})
-        count = 0
-        for d in devices:
-            device_id = _get_device_id(d)
-            if not device_id:
-                continue
-            dtype = _get_device_type(d)
-            if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
-                continue
-            state = states.get(device_id, {}) if isinstance(states, dict) else {}
-            # Check online status
-            is_online = state.get("online", state.get("isOnline", True))
-            if is_online is False:
-                continue
-            # Check not in alarm
-            if state.get("active") or state.get("triggered") or state.get("alarm"):
-                continue
-            if str(state.get("state", "")).upper() == "ALARM":
-                continue
-            count += 1
-        return count
-
-
-class ConneeAlarmSensorAlarmSensor(CoordinatorEntity, SensorEntity):
-    """Diagnostic sensor counting devices in ALARM state."""
-
-    _attr_has_entity_name = False
-    _attr_icon = "mdi:alert-circle"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
-        """Initialize."""
-        super().__init__(coordinator)
-        self._entry = entry
-        self._attr_unique_id = f"ajax_{entry.entry_id}_sensors_alarm"
-        self._attr_name = "Connee Sensori Allarme"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
-            name="Connee Gateway",
-            manufacturer=MANUFACTURER,
-            model="Cloud Gateway",
-        )
-
-    @property
-    def native_value(self) -> int:
-        """Return count of sensors in alarm state."""
-        devices = self.coordinator.data.get("devices", [])
-        states = self.coordinator.data.get("device_states", {})
-        count = 0
-        alarmed_devices = []
-        for d in devices:
-            device_id = _get_device_id(d)
-            if not device_id:
-                continue
-            dtype = _get_device_type(d)
-            if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
-                continue
-            state = states.get(device_id, {}) if isinstance(states, dict) else {}
-            # Check various alarm indicators
-            is_alarm = (
-                state.get("active") is True
-                or state.get("triggered") is True
-                or state.get("alarm") is True
-                or str(state.get("state", "")).upper() == "ALARM"
-                or str(state.get("alarmState", "")).upper() == "ALARM"
-                or state.get("reedClosed") is False  # Door open = alarm for door sensors
-                or state.get("leakDetected") is True
-                or state.get("smokeAlarmDetected") is True
-                or state.get("temperatureAlarmDetected") is True
-                or state.get("glassBreakDetected") is True
-            )
-            if is_alarm:
-                count += 1
-                alarmed_devices.append(d.get("deviceName") or d.get("name") or device_id)
-        return count
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        """Return list of alarmed devices."""
-        devices = self.coordinator.data.get("devices", [])
-        states = self.coordinator.data.get("device_states", {})
-        alarmed = []
-        for d in devices:
-            device_id = _get_device_id(d)
-            if not device_id:
-                continue
-            state = states.get(device_id, {}) if isinstance(states, dict) else {}
-            is_alarm = (
-                state.get("active") is True
-                or state.get("triggered") is True
-                or state.get("alarm") is True
-                or str(state.get("state", "")).upper() == "ALARM"
-                or state.get("reedClosed") is False
-                or state.get("leakDetected") is True
-                or state.get("smokeAlarmDetected") is True
-            )
-            if is_alarm:
-                alarmed.append(d.get("deviceName") or d.get("name") or device_id)
-        return {"alarmed_devices": alarmed}
-
-
-class ConneeAlarmSensorOfflineSensor(CoordinatorEntity, SensorEntity):
-    """Diagnostic sensor counting OFFLINE devices."""
-
-    _attr_has_entity_name = False
-    _attr_icon = "mdi:wifi-off"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
-        """Initialize."""
-        super().__init__(coordinator)
-        self._entry = entry
-        self._attr_unique_id = f"ajax_{entry.entry_id}_sensors_offline"
-        self._attr_name = "Connee Sensori Offline"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
-            name="Connee Gateway",
-            manufacturer=MANUFACTURER,
-            model="Cloud Gateway",
-        )
-
-    @property
-    def native_value(self) -> int:
-        """Return count of offline sensors."""
-        devices = self.coordinator.data.get("devices", [])
-        states = self.coordinator.data.get("device_states", {})
-        count = 0
-        for d in devices:
-            device_id = _get_device_id(d)
-            if not device_id:
-                continue
-            dtype = _get_device_type(d)
-            if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
-                continue
-            state = states.get(device_id, {}) if isinstance(states, dict) else {}
-            is_online = state.get("online", state.get("isOnline"))
-            if is_online is False:
-                count += 1
-        return count
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        """Return list of offline devices."""
-        devices = self.coordinator.data.get("devices", [])
-        states = self.coordinator.data.get("device_states", {})
-        offline = []
-        for d in devices:
-            device_id = _get_device_id(d)
-            if not device_id:
-                continue
-            state = states.get(device_id, {}) if isinstance(states, dict) else {}
-            if state.get("online", state.get("isOnline")) is False:
-                offline.append(d.get("deviceName") or d.get("name") or device_id)
-        return {"offline_devices": offline}

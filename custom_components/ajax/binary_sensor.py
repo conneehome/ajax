@@ -20,13 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def _get_device_type(device: dict) -> str:
     """Return a normalized device type string."""
-    raw = (
-        device.get("type")
-        or device.get("deviceType")
-        or (device.get("device") or {}).get("type")
-        or (device.get("device") or {}).get("deviceType")
-        or ""
-    )
+    raw = device.get("type") or device.get("deviceType") or ""
     raw = str(raw).strip()
 
     # Common aliases seen in Ajax payloads
@@ -40,23 +34,7 @@ def _get_device_type(device: dict) -> str:
         "ReX2": "ReX 2",
     }
 
-    raw = aliases.get(raw, raw)
-
-    # Normalize common suffixes/variants from API (e.g. "DoorProtect Jeweller")
-    raw_clean = raw.replace("(", " ").replace(")", " ").replace("-", " ")
-    raw_clean = " ".join(raw_clean.split())
-    raw_lower = raw_clean.lower()
-
-    if raw_lower.startswith("doorprotect"):
-        if "fibra" in raw_lower:
-            return "DoorProtect Fibra"
-        if "plus" in raw_lower:
-            return "DoorProtect Plus"
-        if "g3" in raw_lower:
-            return "DoorProtect G3"
-        return "DoorProtect"
-
-    return raw_clean
+    return aliases.get(raw, raw)
 
 
 def _get_display_name(device: dict, device_type: str) -> str:
@@ -69,20 +47,6 @@ def _get_display_name(device: dict, device_type: str) -> str:
         or device.get("device", {}).get("name")
         or device_type
     )
-def _get_device_id(device: dict) -> str | None:
-    """Extract device id from different Ajax payload shapes."""
-    raw_id = (
-        device.get("id")
-        or device.get("deviceId")
-        or device.get("device_id")
-        or (device.get("device") or {}).get("id")
-        or (device.get("device") or {}).get("deviceId")
-        or (device.get("device") or {}).get("device_id")
-    )
-    if raw_id is None:
-        return None
-    raw_id = str(raw_id).strip()
-    return raw_id or None
 
 
 async def async_setup_entry(
@@ -99,7 +63,7 @@ async def async_setup_entry(
     states = coordinator.data.get("device_states", {})
 
     for device in devices:
-        device_id = _get_device_id(device)
+        device_id = device.get("id") or device.get("deviceId")
         if not device_id:
             continue
 
@@ -116,26 +80,25 @@ async def async_setup_entry(
         if any(k in state for k in ("reedClosed", "openState", "magneticState", "contactState")):
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
 
-    _LOGGER.info("Setting up %d binary_sensor entities (devices=%d)", len(entities), len(devices))
     async_add_entities(entities)
 
 
 class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Connee Alarm binary sensor."""
 
-    _attr_has_entity_name = True
-    _attr_name = "Stato"
+    _attr_has_entity_name = False
 
     def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
-        self._device_id = _get_device_id(device)
+        self._device_id = device.get("id") or device.get("deviceId")
         self._device_type = _get_device_type(device)
 
         display_name = _get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"ajax_{self._device_id}_state"
+        self._attr_unique_id = f"ajax_{self._device_id}"
+        self._attr_name = display_name
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},
@@ -160,27 +123,6 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             return True
         if reed_closed is True:
             return False
-
-        # Door sensors: fallback field names (varies by model/API)
-        open_state = state.get("openState")
-        if open_state is not None:
-            if isinstance(open_state, bool):
-                return bool(open_state)
-            val = str(open_state).strip().upper()
-            if val in ("OPEN", "OPENED", "TRUE", "1", "ON"):
-                return True
-            if val in ("CLOSE", "CLOSED", "FALSE", "0", "OFF"):
-                return False
-
-        contact_state = state.get("contactState")
-        if contact_state is None:
-            contact_state = state.get("magneticState")
-        if contact_state is not None:
-            val = str(contact_state).strip().upper()
-            if val in ("OPEN", "OPENED"):
-                return True
-            if val in ("CLOSE", "CLOSED"):
-                return False
 
         # Leak sensors (LeaksProtect): various possible field names
         # Check multiple possible field names for leak detection
