@@ -124,10 +124,10 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Arm the alarm in home mode."""
-        await self._api.arm_hub(self._hub_id, "PARTIAL_ARM")
+        await self._api.arm_hub(self._hub_id, "ARM_PARTIAL")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
         """Arm the alarm in night mode."""
-        await self._api.arm_hub(self._hub_id, "NIGHT_ARM")
+        await self._api.arm_hub(self._hub_id, "ARM_NIGHT")
         await self.coordinator.async_request_refresh()
