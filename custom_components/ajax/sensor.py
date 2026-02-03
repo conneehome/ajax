@@ -64,6 +64,19 @@ async def async_setup_entry(
     # Add diagnostic connection status sensor (always first)
     entities.append(ConneeAlarmConnectionSensor(coordinator, api, entry))
 
+    # Summary sensors (compatibility with older dashboards)
+    # These create the following entities:
+    # - sensor.connee_sensori_totale
+    # - sensor.connee_sensori_ok
+    # - sensor.connee_sensori_allarme
+    # - sensor.connee_sensori_offline
+    entities.extend([
+        ConneeAlarmSummarySensor(coordinator, "totale"),
+        ConneeAlarmSummarySensor(coordinator, "ok"),
+        ConneeAlarmSummarySensor(coordinator, "allarme"),
+        ConneeAlarmSummarySensor(coordinator, "offline"),
+    ])
+
 
     for device in devices:
         device_id = device.get("id") or device.get("deviceId")
@@ -450,3 +463,123 @@ class ConneeAlarmConnectionSensor(CoordinatorEntity, SensorEntity):
     def available(self) -> bool:
         """Always available so user can see status."""
         return True
+
+
+class ConneeAlarmSummarySensor(CoordinatorEntity, SensorEntity):
+    """Summary sensors for dashboards (total/ok/alarm/offline)."""
+
+    _attr_has_entity_name = False
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, metric: str):
+        super().__init__(coordinator)
+        self._metric = metric
+
+        names = {
+            "totale": "Connee Sensori Totale",
+            "ok": "Connee Sensori OK",
+            "allarme": "Connee Sensori Allarme",
+            "offline": "Connee Sensori Offline",
+        }
+        icons = {
+            "totale": "mdi:counter",
+            "ok": "mdi:check-circle",
+            "allarme": "mdi:alarm-light",
+            "offline": "mdi:wifi-off",
+        }
+
+        # NOTE: keep these unique_ids stable to preserve existing entity_registry IDs
+        self._attr_unique_id = f"connee_sensori_{metric}"
+        self._attr_name = names.get(metric, f"Connee Sensori {metric}")
+        self._attr_icon = icons.get(metric, "mdi:counter")
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "connee_summary")},
+            name="Connee Alarm",
+            manufacturer=MANUFACTURER,
+            model="Summary",
+        )
+
+    def _iter_devices_with_state(self) -> list[dict]:
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        out: list[dict] = []
+        if not isinstance(devices, list):
+            return out
+
+        for device in devices:
+            device_id = device.get("id") or device.get("deviceId")
+            if not device_id:
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            merged = {}
+            if isinstance(device, dict):
+                merged.update(device)
+            if isinstance(state, dict):
+                merged.update(state)
+            merged["_device_id"] = device_id
+            out.append(merged)
+        return out
+
+    @staticmethod
+    def _is_offline(d: dict) -> bool:
+        online = d.get("online", d.get("isOnline", True))
+        return online is False
+
+    @staticmethod
+    def _is_alarm(d: dict) -> bool:
+        # Ignore offline devices for alarm counting
+        online = d.get("online", d.get("isOnline", True))
+        if online is False:
+            return False
+
+        # Door/window open
+        if d.get("reedClosed") is False:
+            return True
+        if str(d.get("openState", "")).upper() == "OPEN":
+            return True
+        if str(d.get("state", "")).upper() == "OPEN":
+            return True
+
+        # Flood / motion / smoke / temp / CO
+        if d.get("leakDetected") is True:
+            return True
+        if d.get("motionDetected") is True or d.get("motion") is True:
+            return True
+        if d.get("smokeAlarmDetected") is True:
+            return True
+        if d.get("temperatureAlarmDetected") is True:
+            return True
+        if d.get("coAlarmDetected") is True:
+            return True
+
+        # Generic triggers
+        if d.get("active") is True:
+            return True
+        if d.get("triggered") is True:
+            return True
+        if d.get("alarm") is True:
+            return True
+        if str(d.get("alarmState", "")).upper() == "ALARM":
+            return True
+        if str(d.get("state", "")).upper() == "ALARM":
+            return True
+
+        return False
+
+    @property
+    def native_value(self) -> int:
+        devices = self._iter_devices_with_state()
+        total = len(devices)
+        offline = sum(1 for d in devices if self._is_offline(d))
+        alarm = sum(1 for d in devices if self._is_alarm(d))
+        ok = max(0, total - offline - alarm)
+
+        if self._metric == "totale":
+            return total
+        if self._metric == "offline":
+            return offline
+        if self._metric == "allarme":
+            return alarm
+        if self._metric == "ok":
+            return ok
+        return 0

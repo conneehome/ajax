@@ -113,10 +113,29 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
-        """Return true if sensor is on."""
+        """Return true if sensor is on (triggered/open/alarm)."""
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
+        # =========================================================================
+        # UNIVERSAL STATE DETECTION
+        # Ajax API uses 'state' field: PASSIVE = normal, ACTIVE = triggered/alarm
+        # This works for ALL sensor types (door, motion, leak, smoke, etc.)
+        # =========================================================================
+        sensor_state = str(state.get("state", "")).upper()
+        
+        # ACTIVE state means sensor is triggered (works for all types)
+        if sensor_state in ("ACTIVE", "ALARM", "TRIGGERED", "OPEN"):
+            return True
+        
+        # PASSIVE state means sensor is normal (works for all types)
+        if sensor_state == "PASSIVE":
+            return False
+
+        # =========================================================================
+        # SPECIFIC SENSOR TYPE DETECTION (fallback for explicit fields)
+        # =========================================================================
+        
         # Door sensors: reedClosed=false => OPEN => ON
         reed_closed = state.get("reedClosed")
         if reed_closed is False:
@@ -125,7 +144,6 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             return False
 
         # Leak sensors (LeaksProtect): various possible field names
-        # Check multiple possible field names for leak detection
         for leak_key in ("leakDetected", "leak", "floodDetected", "flood", "waterDetected", "water", "moistureDetected"):
             leak_val = state.get(leak_key)
             if leak_val is True:
@@ -133,29 +151,32 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             if leak_val is False:
                 return False
         
-        # Some LeaksProtect might use state field with specific values
+        # Leak state as string
         leak_state = state.get("leakState", state.get("sensorState", ""))
         if str(leak_state).upper() in ("LEAK", "DETECTED", "FLOOD", "WET", "ALARM"):
             return True
-        if str(leak_state).upper() in ("DRY", "OK", "NORMAL", "PASSIVE"):
+        if str(leak_state).upper() in ("DRY", "OK", "NORMAL"):
             return False
 
-        # Smoke/Fire sensors: smokeAlarmDetected, temperatureAlarmDetected
+        # Smoke/Fire sensors
         if state.get("smokeAlarmDetected") is True:
             return True
         if state.get("temperatureAlarmDetected") is True:
+            return True
+        if state.get("coAlarmDetected") is True:
             return True
 
         # Glass break sensors
         if state.get("glassBreakDetected") is True:
             return True
 
-        # Motion sensors: check state field
-        sensor_state = state.get("state", "")
-        if str(sensor_state).upper() == "ALARM":
+        # Motion sensors (explicit flags)
+        if state.get("motionDetected") is True:
+            return True
+        if state.get("motion") is True:
             return True
 
-        # Generic fallback for motion/alarm-like payloads
+        # Generic fallback for alarm-like payloads
         if state.get("active") is True:
             return True
         if state.get("triggered") is True:
@@ -165,6 +186,7 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if str(state.get("alarmState", "")).upper() == "ALARM":
             return True
 
+        # Default: sensor is off (normal state)
         return False
 
     @property

@@ -21,6 +21,32 @@ views:
           - arm_home
           - arm_night
 
+      # Riepilogo Sensori (contatori)
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: button
+            entity: sensor.connee_sensori_totale
+            name: TOTALE
+            show_state: true
+            icon: mdi:counter
+          - type: button
+            entity: sensor.connee_sensori_ok
+            name: OK
+            show_state: true
+            icon: mdi:check-circle
+          - type: button
+            entity: sensor.connee_sensori_allarme
+            name: ALLARMI
+            show_state: true
+            icon: mdi:alarm-light
+          - type: button
+            entity: sensor.connee_sensori_offline
+            name: OFFLINE
+            show_state: true
+            icon: mdi:wifi-off
+
       # Sensori (aggiungili dopo averli trovati in Strumenti Sviluppatore → Stati)
       - type: entities
         title: Sensori (aggiungi i tuoi)
@@ -64,4 +90,4 @@ views:
           - **Alarm entity:** alarm_control_panel.ajax
           - Sensori: cerca "ajax" in **Strumenti Sviluppatore → Stati**
           
-          **Versione:** 1.3.15
+          **Versione:** 1.3.16
