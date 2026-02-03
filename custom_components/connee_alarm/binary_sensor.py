@@ -107,9 +107,18 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             model=self._device_type,
         )
 
+        # Some device types (e.g. Button/DoubleButton) don't have a valid
+        # BinarySensorDeviceClass. Never crash platform setup because of this.
         device_class = DEVICE_CLASS_MAP.get(self._device_type)
-        if device_class:
-            self._attr_device_class = BinarySensorDeviceClass(device_class)
+        if device_class and str(device_class).lower() != "none":
+            try:
+                self._attr_device_class = BinarySensorDeviceClass(device_class)
+            except ValueError:
+                _LOGGER.debug(
+                    "Unknown binary_sensor device_class '%s' for type '%s'",
+                    device_class,
+                    self._device_type,
+                )
 
     @property
     def is_on(self) -> bool:
