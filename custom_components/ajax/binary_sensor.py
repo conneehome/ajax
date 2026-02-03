@@ -114,10 +114,6 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return true if sensor is on."""
-        # Safe check for coordinator.data being None
-        if self.coordinator.data is None:
-            return False
-            
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
@@ -174,10 +170,6 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         """Return extra attributes."""
-        # Safe check for coordinator.data being None
-        if self.coordinator.data is None:
-            return {"device_type": self._device_type, "connee_id": self._device_id}
-            
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
