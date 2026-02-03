@@ -62,24 +62,46 @@ async def async_setup_entry(
     devices = coordinator.data.get("devices", [])
     states = coordinator.data.get("device_states", {})
 
+    _LOGGER.info("BINARY_SENSOR SETUP: Found %d devices, %d device_states", len(devices), len(states) if isinstance(states, dict) else 0)
+
     for device in devices:
         device_id = device.get("id") or device.get("deviceId")
         if not device_id:
+            _LOGGER.debug("Skipping device without ID: %s", device)
             continue
 
         device_type = _get_device_type(device)
         platform = DEVICE_TYPE_MAP.get(device_type)
+        
+        _LOGGER.debug("Device %s: type='%s', mapped_platform='%s'", device_id, device_type, platform)
 
         # Primary binary-sensor types (door/motion/leak/smoke...)
         if platform == "binary_sensor":
+            _LOGGER.info("Creating binary_sensor for device %s (%s)", device_id, device_type)
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
             continue
 
-        # Fallback: if state payload contains door-like fields, expose it anyway
+        # Fallback: if state payload contains stateful fields, expose as binary_sensor
         state = states.get(device_id, {}) if isinstance(states, dict) else {}
-        if any(k in state for k in ("reedClosed", "openState", "magneticState", "contactState")):
+        state_keys = ("reedClosed", "openState", "magneticState", "contactState", "state", 
+                      "leakDetected", "smokeAlarmDetected", "motionDetected", "glassBreakDetected")
+        if any(k in state for k in state_keys):
+            _LOGGER.info("Creating binary_sensor (fallback) for device %s (%s) - has state fields: %s", 
+                        device_id, device_type, [k for k in state_keys if k in state])
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
+            continue
+        
+        # Final fallback: if device_type contains door/motion/leak/smoke/glass keywords, create anyway
+        type_lower = device_type.lower()
+        sensor_keywords = ("door", "motion", "leak", "fire", "smoke", "glass", "combi", "protect")
+        if any(kw in type_lower for kw in sensor_keywords):
+            _LOGGER.info("Creating binary_sensor (keyword fallback) for device %s (%s)", device_id, device_type)
+            entities.append(ConneeAlarmBinarySensor(coordinator, device))
+            continue
+        
+        _LOGGER.debug("Device %s (%s) NOT created as binary_sensor", device_id, device_type)
 
+    _LOGGER.info("BINARY_SENSOR SETUP: Created %d entities", len(entities))
     async_add_entities(entities)
 
 
