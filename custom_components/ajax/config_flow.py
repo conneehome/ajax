@@ -79,7 +79,7 @@ class ConneeAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if len(self._hubs) == 1:
                         hub = self._hubs[0]
                         return self.async_create_entry(
-                            title=f"Connee Alarm - {hub.get('name', 'Hub')}",
+                            title=f"Ajax Systems - {hub.get('name', 'Hub')}",
                             data={
                                 CONF_EMAIL: self._email,
                                 CONF_PASSWORD: self._password,
@@ -114,7 +114,7 @@ class ConneeAlarmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             hub = next((h for h in self._hubs if h.get("id") == hub_id), self._hubs[0])
             
             return self.async_create_entry(
-                title=f"Connee Alarm - {hub.get('name', 'Hub')}",
+                title=f"Ajax Systems - {hub.get('name', 'Hub')}",
                 data={
                     CONF_EMAIL: self._email,
                     CONF_PASSWORD: self._password,

@@ -139,19 +139,16 @@ def _log_device_diagnostics(devices: list) -> None:
         )
 
 
-PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.VALVE, Platform.SWITCH]
+PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.VALVE, Platform.SWITCH, Platform.UPDATE]
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Migrate old entry to new version."""
     import uuid
-    
     _LOGGER.info("Migrating Connee Alarm from version %s", config_entry.version)
-    
     if config_entry.version == 1:
         # Version 1 -> 2: Add device_id
         new_data = {**config_entry.data}
-        
         if "device_id" not in new_data:
             new_data["device_id"] = str(uuid.uuid4())
             _LOGGER.info(
@@ -159,21 +156,18 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
                 new_data["device_id"][:8],
                 new_data.get("email", "unknown")
             )
-        
         hass.config_entries.async_update_entry(
             config_entry,
             data=new_data,
             version=2
         )
         _LOGGER.info("Migration to version 2 successful")
-    
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Connee Alarm from a config entry."""
     import uuid
-    
     hass.data.setdefault(DOMAIN, {})
 
     _log_build_info()

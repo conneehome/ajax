@@ -20,7 +20,13 @@ _LOGGER = logging.getLogger(__name__)
 
 def _get_device_type(device: dict) -> str:
     """Return a normalized device type string."""
-    raw = device.get("type") or device.get("deviceType") or ""
+    raw = (
+        device.get("type")
+        or device.get("deviceType")
+        or (device.get("device") or {}).get("type")
+        or (device.get("device") or {}).get("deviceType")
+        or ""
+    )
     raw = str(raw).strip()
 
     # Common aliases seen in Ajax payloads
@@ -34,7 +40,23 @@ def _get_device_type(device: dict) -> str:
         "ReX2": "ReX 2",
     }
 
-    return aliases.get(raw, raw)
+    raw = aliases.get(raw, raw)
+
+    # Normalize common suffixes/variants from API (e.g. "DoorProtect Jeweller")
+    raw_clean = raw.replace("(", " ").replace(")", " ").replace("-", " ")
+    raw_clean = " ".join(raw_clean.split())
+    raw_lower = raw_clean.lower()
+
+    if raw_lower.startswith("doorprotect"):
+        if "fibra" in raw_lower:
+            return "DoorProtect Fibra"
+        if "plus" in raw_lower:
+            return "DoorProtect Plus"
+        if "g3" in raw_lower:
+            return "DoorProtect G3"
+        return "DoorProtect"
+
+    return raw_clean
 
 
 def _get_display_name(device: dict, device_type: str) -> str:
@@ -47,6 +69,21 @@ def _get_display_name(device: dict, device_type: str) -> str:
         or device.get("device", {}).get("name")
         or device_type
     )
+
+def _get_device_id(device: dict) -> str | None:
+    """Extract device id from different Ajax payload shapes."""
+    raw_id = (
+        device.get("id")
+        or device.get("deviceId")
+        or device.get("device_id")
+        or (device.get("device") or {}).get("id")
+        or (device.get("device") or {}).get("deviceId")
+        or (device.get("device") or {}).get("device_id")
+    )
+    if raw_id is None:
+        return None
+    raw_id = str(raw_id).strip()
+    return raw_id or None
 
 
 async def async_setup_entry(
@@ -63,7 +100,7 @@ async def async_setup_entry(
     states = coordinator.data.get("device_states", {})
 
     for device in devices:
-        device_id = device.get("id") or device.get("deviceId")
+        device_id = _get_device_id(device)
         if not device_id:
             continue
 
@@ -80,25 +117,26 @@ async def async_setup_entry(
         if any(k in state for k in ("reedClosed", "openState", "magneticState", "contactState")):
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
 
+    _LOGGER.info("Setting up %d binary_sensor entities (devices=%d)", len(entities), len(devices))
     async_add_entities(entities)
 
 
 class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Connee Alarm binary sensor."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
+    _attr_name = "Stato"
 
     def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
         """Initialize."""
         super().__init__(coordinator)
         self._device = device
-        self._device_id = device.get("id") or device.get("deviceId")
+        self._device_id = _get_device_id(device)
         self._device_type = _get_device_type(device)
 
         display_name = _get_display_name(device, self._device_type)
 
-        self._attr_unique_id = f"ajax_{self._device_id}"
-        self._attr_name = display_name
+        self._attr_unique_id = f"ajax_{self._device_id}_state"
         self._attr_manufacturer = MANUFACTURER
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, str(self._device_id))},
@@ -108,40 +146,42 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         )
 
         device_class = DEVICE_CLASS_MAP.get(self._device_type)
-        if device_class:
+        if device_class and device_class != "none":
             self._attr_device_class = BinarySensorDeviceClass(device_class)
 
     @property
     def is_on(self) -> bool:
-        """Return true if sensor is on (triggered/open/alarm)."""
+        """Return true if sensor is on."""
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
 
-        # =========================================================================
-        # UNIVERSAL STATE DETECTION
-        # Ajax API uses 'state' field: PASSIVE = normal, ACTIVE = triggered/alarm
-        # This works for ALL sensor types (door, motion, leak, smoke, etc.)
-        # =========================================================================
-        sensor_state = str(state.get("state", "")).upper()
-        
-        # ACTIVE state means sensor is triggered (works for all types)
-        if sensor_state in ("ACTIVE", "ALARM", "TRIGGERED", "OPEN"):
-            return True
-        
-        # PASSIVE state means sensor is normal (works for all types)
-        if sensor_state == "PASSIVE":
-            return False
-
-        # =========================================================================
-        # SPECIFIC SENSOR TYPE DETECTION (fallback for explicit fields)
-        # =========================================================================
-        
         # Door sensors: reedClosed=false => OPEN => ON
         reed_closed = state.get("reedClosed")
         if reed_closed is False:
             return True
         if reed_closed is True:
             return False
+
+        # Door sensors: fallback field names (varies by model/API)
+        open_state = state.get("openState")
+        if open_state is not None:
+            if isinstance(open_state, bool):
+                return bool(open_state)
+            val = str(open_state).strip().upper()
+            if val in ("OPEN", "OPENED", "TRUE", "1", "ON"):
+                return True
+            if val in ("CLOSE", "CLOSED", "FALSE", "0", "OFF"):
+                return False
+
+        contact_state = state.get("contactState")
+        if contact_state is None:
+            contact_state = state.get("magneticState")
+        if contact_state is not None:
+            val = str(contact_state).strip().upper()
+            if val in ("OPEN", "OPENED"):
+                return True
+            if val in ("CLOSE", "CLOSED"):
+                return False
 
         # Leak sensors (LeaksProtect): various possible field names
         for leak_key in ("leakDetected", "leak", "floodDetected", "flood", "waterDetected", "water", "moistureDetected"):
@@ -151,32 +191,29 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             if leak_val is False:
                 return False
         
-        # Leak state as string
+        # Some LeaksProtect might use state field with specific values
         leak_state = state.get("leakState", state.get("sensorState", ""))
         if str(leak_state).upper() in ("LEAK", "DETECTED", "FLOOD", "WET", "ALARM"):
             return True
-        if str(leak_state).upper() in ("DRY", "OK", "NORMAL"):
+        if str(leak_state).upper() in ("DRY", "OK", "NORMAL", "PASSIVE"):
             return False
 
-        # Smoke/Fire sensors
+        # Smoke/Fire sensors: smokeAlarmDetected, temperatureAlarmDetected
         if state.get("smokeAlarmDetected") is True:
             return True
         if state.get("temperatureAlarmDetected") is True:
-            return True
-        if state.get("coAlarmDetected") is True:
             return True
 
         # Glass break sensors
         if state.get("glassBreakDetected") is True:
             return True
 
-        # Motion sensors (explicit flags)
-        if state.get("motionDetected") is True:
-            return True
-        if state.get("motion") is True:
+        # Motion sensors: check state field
+        sensor_state = state.get("state", "")
+        if str(sensor_state).upper() == "ALARM":
             return True
 
-        # Generic fallback for alarm-like payloads
+        # Generic fallback for motion/alarm-like payloads
         if state.get("active") is True:
             return True
         if state.get("triggered") is True:
@@ -186,7 +223,6 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if str(state.get("alarmState", "")).upper() == "ALARM":
             return True
 
-        # Default: sensor is off (normal state)
         return False
 
     @property
@@ -203,7 +239,6 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         }
 
         # Pass-through ALL useful fields if present
-        # Including Ajax-specific field names
         useful_keys = (
             "battery", "batteryLevel", "batteryCharge", "batteryChargeLevelPercentage",
             "signal", "signalLevel", "signalStrength",

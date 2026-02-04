@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.0"  # Used in User-Agent header
+VERSION = "1.3.11"  # Used in User-Agent header
 
 # Config
 CONF_HUB_ID = "hub_id"
@@ -15,6 +15,9 @@ DEFAULT_SCAN_INTERVAL = 10
 # API - Connee Gateway
 CONNEE_GATEWAY_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/ajax-api"
 TOKEN_REFRESH_INTERVAL = 600
+
+# Connee Logo URL for entity_picture (GitHub raw)
+CONNEE_LOGO_URL = "https://raw.githubusercontent.com/conneehome/ajax/main/logo.png"
 
 # ==============================================================================
 # AJAX FULL DEVICE CATALOG (2024-2025)

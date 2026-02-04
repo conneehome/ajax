@@ -1,9 +1,9 @@
-# Connee Alarm - Integrazione Home Assistant
+# Ajax Systems by Connee - Integrazione Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.22-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.11-blue.svg)
 
-**Integrazione ufficiale Connee** - Sistema di sicurezza per Home Assistant.
+**Integrazione ufficiale Connee** - Sistema di sicurezza Ajax per Home Assistant.
 
 ## 🔐 Autorizzazione Richiesta
 
@@ -30,36 +30,25 @@ Per richiedere l'attivazione, contatta il supporto Connee.
 3. Aggiungi URL: `https://github.com/conneehome/ajax`
 4. Categoria: **Integrazione**
 5. Clicca **Aggiungi**
-6. Cerca "Connee Alarm" e installa
+6. Cerca "Ajax Systems by Connee" e installa
 7. Riavvia Home Assistant
 
 ### Metodo 2: Installazione Manuale
 
 1. Scarica lo ZIP da questo repository
-2. Estrai la cartella `custom_components/connee_alarm` nella tua cartella `config/custom_components/`
-3. Copia la cartella `www/connee_alarm` nella tua cartella `config/www/` (per il logo)
-4. Riavvia Home Assistant
+2. Estrai la cartella `custom_components/ajax` nella tua cartella `config/custom_components/`
+3. Riavvia Home Assistant
 
 ## ⚙️ Configurazione
 
 1. Vai su **Impostazioni** → **Dispositivi e Servizi** → **Aggiungi Integrazione**
-2. Cerca "Connee Alarm"
+2. Cerca "Ajax Systems"
 3. Inserisci:
    - **Email** - La tua email registrata
    - **Password** - La tua password
 4. Seleziona l'hub se ne hai più di uno
 
 **Nota:** Il tuo account deve essere attivato da Connee. Se ricevi errore "Accesso negato", contatta il supporto Connee.
-
-## 📊 Dashboard
-
-Dopo l'installazione, troverai automaticamente un pannello **"Connee Alarm"** nella sidebar di Home Assistant con:
-
-- 🖼️ **Logo Connee** - Branding personalizzato
-- 🛡️ **Controllo allarme** - Arm Away, Arm Home, Arm Night, Disarm
-- 📟 **Griglia sensori** - Stati in tempo reale
-- 🔋 **Monitor batterie** - Avvisi batterie scariche
-- 📜 **Log eventi** - Ultimi 24h
 
 ## 🛡️ Dispositivi Supportati
 
@@ -71,6 +60,8 @@ Dopo l'installazione, troverai automaticamente un pannello **"Connee Alarm"** ne
 | LeaksProtect | binary_sensor | moisture |
 | FireProtect | binary_sensor | smoke |
 | Hub / Hub 2 | alarm_control_panel | - |
+| WaterStop | valve | water |
+| Socket/Relay | switch | outlet |
 | KeyPad | sensor | - |
 | SpaceControl | sensor | - |
 
@@ -86,7 +77,7 @@ automation:
     action:
       - service: alarm_control_panel.alarm_arm_away
         target:
-          entity_id: alarm_control_panel.connee_alarm
+          entity_id: alarm_control_panel.ajax_hub_panel
 ```
 
 ## 🐛 Problemi?

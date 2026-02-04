@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect Connee Alarm",
+        "title": "Connect Ajax Systems",
         "description": "Enter your Ajax credentials to connect the alarm system. Data will transit through the Connee gateway exclusively for Home Assistant integration purposes.",
         "data": {
           "email": "Ajax Email",

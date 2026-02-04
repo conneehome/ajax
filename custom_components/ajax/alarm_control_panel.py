@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import ConneeAlarmDataCoordinator
@@ -85,49 +86,59 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         arm_state = str(hub_state.get("armState", hub_state.get("state", "unknown"))).upper()
         
         # Ajax returns various states:
-        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, ARMED_NIGHT_MODE_OFF, PARTIAL, etc.
+        # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, DISARMED_NIGHT_MODE_ON,
+        # DISARMED_NIGHT_MODE_OFF, PARTIAL, etc.
         
-        # Check for ARMED variants (ARMED_NIGHT_MODE_OFF is still armed, just with night mode off)
-        if "ARMED" in arm_state and "DISARM" not in arm_state:
-            if "NIGHT_MODE_ON" in arm_state:
-                return AlarmControlPanelState.ARMED_NIGHT
-            elif "PARTIAL" in arm_state:
-                return AlarmControlPanelState.ARMED_HOME
-            else:
-                # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
-                return AlarmControlPanelState.ARMED_AWAY
+        # Precedence matters:
+        # 1) NIGHT_MODE_ON can appear with both ARMED_ and DISARMED_ prefix
+        # 2) Any DISARM* state that is NOT NIGHT_MODE_ON must map to DISARMED
+        #    (e.g. DISARMED_NIGHT_MODE_OFF)
+        # 3) PARTIAL
+        # 4) ARMED/ARM
+        # 5) NIGHT fallback (but ignore NIGHT_MODE_OFF)
+        if "NIGHT_MODE_ON" in arm_state:
+            return AlarmControlPanelState.ARMED_NIGHT
         
         if "DISARM" in arm_state:
             return AlarmControlPanelState.DISARMED
         
-        if arm_state in ("ARM", "ARMED"):
-            return AlarmControlPanelState.ARMED_AWAY
-        
-        if "NIGHT" in arm_state:
-            return AlarmControlPanelState.ARMED_NIGHT
-            
         if "PARTIAL" in arm_state:
             return AlarmControlPanelState.ARMED_HOME
+        
+        if arm_state in ("ARM", "ARMED") or ("ARMED" in arm_state and "DISARM" not in arm_state):
+            # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
+            return AlarmControlPanelState.ARMED_AWAY
+        
+        if "NIGHT" in arm_state and "NIGHT_MODE_OFF" not in arm_state:
+            return AlarmControlPanelState.ARMED_NIGHT
         
         # Default to disarmed for unknown states
         return AlarmControlPanelState.DISARMED
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm."""
-        await self._api.arm_hub(self._hub_id, "DISARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "DISARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Arm the alarm in away mode."""
-        await self._api.arm_hub(self._hub_id, "ARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Arm the alarm in home mode."""
-        await self._api.arm_hub(self._hub_id, "PARTIAL_ARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "PARTIAL_ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
         """Arm the alarm in night mode."""
-        await self._api.arm_hub(self._hub_id, "NIGHT_ARM")
+        success, error_msg = await self._api.arm_hub(self._hub_id, "NIGHT_ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()

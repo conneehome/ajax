@@ -1,6 +1,6 @@
 # Assets
 
-Questa cartella contiene le risorse grafiche per Connee Alarm.
+Questa cartella contiene le risorse grafiche per Ajax Systems by Connee.
 
 ## Logo
 - **connee-logo.png** - Logo Connee nero (per sfondi chiari)
