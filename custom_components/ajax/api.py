@@ -1,12 +1,14 @@
-"""Connee Alarm API Client."""
+"""Connee Alarm API Client - v2.0 (Direct Ajax API)."""
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import asyncio
+import hashlib
+import base64
 
 from aiohttp import ClientSession, ClientTimeout
 
-from .const import CONNEE_GATEWAY_URL, TOKEN_REFRESH_INTERVAL, VERSION
+from .const import CONNEE_GATEWAY_URL, AJAX_API_BASE, TOKEN_REFRESH_INTERVAL, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -15,9 +17,12 @@ BACKOFF_INITIAL_SECONDS = 60  # 1 minute initial backoff
 BACKOFF_MAX_SECONDS = 900  # 15 minutes max backoff
 BACKOFF_MULTIPLIER = 2
 
+# Batch size for parallel device state requests
+DEVICE_STATE_BATCH_SIZE = 5
+
 
 class ConneeAlarmApiClient:
-    """Client for Connee Alarm API."""
+    """Client for Connee Alarm API - Direct Ajax communication."""
 
     # Connection status constants
     STATUS_CONNECTED = "connected"
@@ -30,23 +35,24 @@ class ConneeAlarmApiClient:
         session: ClientSession,
         email: str,
         password: str,
-        device_id: str,  # Unique device ID per installation
+        device_id: str,
     ):
         """Initialize the API client."""
         self.session = session
         self.email = email
         self.password = password
-        self.device_id = device_id  # Persistent unique ID for this client
+        self.device_id = device_id
         self.session_token: Optional[str] = None
         self.user_id: Optional[str] = None
         self.hub_id: Optional[str] = None
         self.token_expires: Optional[datetime] = None
-        self._login_lock = False  # Prevent concurrent login attempts
-        self._backoff_until: Optional[datetime] = None  # Backoff timer
-        self._consecutive_failures = 0  # Track failures for exponential backoff
-        self._last_error: Optional[str] = None  # Last error message for diagnostics
+        self._ajax_api_key: Optional[str] = None  # Obtained from gateway at login
+        self._login_lock = False
+        self._backoff_until: Optional[datetime] = None
+        self._consecutive_failures = 0
+        self._last_error: Optional[str] = None
         self._connection_status: str = self.STATUS_DISCONNECTED
-        self._auth_failed: bool = False  # Track permanent auth failure for ConfigEntryAuthFailed
+        self._auth_failed: bool = False
 
     @property
     def connection_status(self) -> str:
@@ -70,7 +76,8 @@ class ConneeAlarmApiClient:
                 return "Errore autenticazione. Verifica le credenziali o la licenza Connee."
             return f"Errore: {self._last_error[:100]}"
         if self.session_token:
-            return "Connesso al gateway Connee"
+            mode = "diretto" if self._ajax_api_key else "gateway"
+            return f"Connesso ad Ajax ({mode})"
         return "Non connesso"
 
     @property
@@ -95,10 +102,9 @@ class ConneeAlarmApiClient:
         )
         self._backoff_until = datetime.now() + timedelta(seconds=backoff_seconds)
         _LOGGER.warning(
-            "Setting backoff for %d seconds (attempt %d). Next retry after: %s",
+            "Setting backoff for %d seconds (attempt %d)",
             backoff_seconds,
             self._consecutive_failures,
-            self._backoff_until.isoformat()
         )
 
     def _clear_backoff(self) -> None:
@@ -106,21 +112,12 @@ class ConneeAlarmApiClient:
         self._consecutive_failures = 0
         self._backoff_until = None
 
-    async def _call_gateway(
-        self,
-        action: str,
-        body: Optional[Dict] = None,
-        _retry_after_relogin: bool = False,
-    ) -> Any:
-        """Call Connee Gateway API with automatic re-authentication on token errors."""
-        # Check backoff before making requests
+    # ── Gateway calls (login + token verification only) ──
+
+    async def _call_gateway(self, action: str, body: Optional[Dict] = None) -> Any:
+        """Call Connee Gateway for login/auth only."""
         if self._is_in_backoff():
             remaining = (self._backoff_until - datetime.now()).total_seconds()
-            _LOGGER.warning(
-                "In backoff period. %d seconds remaining. Skipping request: %s",
-                int(remaining),
-                action
-            )
             return {"error": 429, "message": f"In backoff period. Retry in {int(remaining)}s"}
 
         url = f"{CONNEE_GATEWAY_URL}?action={action}"
@@ -130,11 +127,7 @@ class ConneeAlarmApiClient:
             "User-Agent": f"ConneeAlarm/{VERSION} (Device {self.device_id})",
             "X-Device-Id": self.device_id,
         }
-
         request_body = body or {}
-        if self.session_token:
-            request_body["sessionToken"] = self.session_token
-        # Always include deviceId in requests
         request_body["deviceId"] = self.device_id
 
         try:
@@ -144,298 +137,333 @@ class ConneeAlarmApiClient:
             ) as resp:
                 result = await resp.json()
 
-                # Check for session token errors - attempt auto re-login
-                is_token_error = False
-                if isinstance(result, dict):
-                    error_msg_lower = str(result.get("message", "")).lower()
-                    error_lower = str(result.get("error", "")).lower()
-                    is_token_error = (
-                        "session token required" in error_msg_lower or
-                        "session token required" in error_lower or
-                        "unauthorized" in error_msg_lower or
-                        "invalid token" in error_msg_lower or
-                        "token expired" in error_msg_lower
-                    )
-
-                # Handle 401/403 or token errors with automatic re-login
-                if resp.status in (401, 403) or is_token_error:
+                if resp.status in (401, 403):
                     error_msg = result.get("message", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
-                    
-                    # If we haven't already retried after re-login, attempt it now
-                    if not _retry_after_relogin and action != "login":
-                        _LOGGER.info(
-                            "Token/auth error detected (%s). Attempting automatic re-login...",
-                            error_msg
-                        )
-                        # Clear current token
-                        self.session_token = None
-                        self.token_expires = None
-                        
-                        # Attempt re-login
-                        login_success = await self.login()
-                        if login_success:
-                            _LOGGER.info("Re-login successful. Retrying original request: %s", action)
-                            # Retry the original request with new token
-                            return await self._call_gateway(action, body, _retry_after_relogin=True)
-                        else:
-                            _LOGGER.error("Re-login failed. Cannot complete request: %s", action)
-                            self._auth_failed = True  # Mark auth as permanently failed
-                            return {"error": 401, "message": "Re-login failed", "auth_failed": True}
-                    
-                    # Already retried or it's a login action - set backoff
                     self._last_error = f"{resp.status}: {error_msg}"
-                    _LOGGER.error(
-                        "Auth/rate limit error (HTTP %d): %s. Activating backoff.",
-                        resp.status,
-                        result
-                    )
                     self._set_backoff()
                     return {"error": resp.status, "message": error_msg, "auth_failed": True}
 
-                # Handle rate limiting
                 if resp.status == 429:
-                    error_msg = result.get("message", "Rate limited") if isinstance(result, dict) else "Rate limited"
-                    self._last_error = f"429: {error_msg}"
-                    _LOGGER.error("Rate limit error (HTTP 429): %s. Activating backoff.", result)
                     self._set_backoff()
-                    return {"error": 429, "message": error_msg}
+                    return {"error": 429, "message": "Rate limited"}
 
                 if resp.status == 200 and isinstance(result, dict) and result.get("success"):
-                    self._clear_backoff()  # Success - clear any backoff
-                    self._last_error = None  # Clear error on success
-                    self._connection_status = self.STATUS_CONNECTED
-                    self._auth_failed = False  # Clear auth failed flag on success
+                    self._clear_backoff()
+                    self._last_error = None
+                    self._auth_failed = False
                     return result.get("data")
 
-                if isinstance(result, dict):
-                    error_msg = result.get("error", f"HTTP {resp.status}")
-                else:
-                    error_msg = f"HTTP {resp.status}"
-
+                error_msg = result.get("error", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
                 self._last_error = str(error_msg)
-                _LOGGER.error("Gateway error: %s", error_msg)
                 return {"error": resp.status, "message": error_msg}
         except asyncio.TimeoutError:
-            self._last_error = "Request timeout"
-            _LOGGER.error("Gateway request timeout for action: %s", action)
-            return {"error": -1, "message": "Request timeout"}
+            self._last_error = "Gateway timeout"
+            return {"error": -1, "message": "Gateway timeout"}
         except Exception as e:
             self._last_error = str(e)
-            _LOGGER.error("Gateway request error: %s", e)
             return {"error": -1, "message": str(e)}
 
+    # ── Direct Ajax API calls (all polling) ──
+
+    async def _call_ajax_direct(
+        self,
+        endpoint: str,
+        method: str = "GET",
+        body: Optional[Dict] = None,
+        retry_count: int = 0,
+    ) -> Any:
+        """Call Ajax API directly (no cloud proxy)."""
+        MAX_RETRIES = 2
+
+        if self._is_in_backoff():
+            return {"error": 429, "message": "In backoff period"}
+
+        if not self._ajax_api_key:
+            _LOGGER.error("No Ajax API key available. Re-login required.")
+            return {"error": 401, "message": "No API key"}
+
+        url = f"{AJAX_API_BASE}{endpoint}"
+        headers = {
+            "X-Api-Key": self._ajax_api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": f"ConneeAlarm/{VERSION} (Device {self.device_id})",
+            "X-Device-Id": self.device_id,
+        }
+        if self.session_token:
+            headers["X-Session-Token"] = self.session_token
+
+        options = {"headers": headers, "timeout": ClientTimeout(total=30)}
+        if body and method in ("POST", "PUT"):
+            options["json"] = body
+
+        try:
+            async with self.session.request(method, url, **options) as resp:
+                response_text = await resp.text()
+
+                if resp.status in (500, 504) and retry_count < MAX_RETRIES:
+                    delay = (2 ** retry_count)
+                    _LOGGER.warning("Ajax API %d, retrying in %ds...", resp.status, delay)
+                    await asyncio.sleep(delay)
+                    return await self._call_ajax_direct(endpoint, method, body, retry_count + 1)
+
+                if resp.status in (401, 403):
+                    self._last_error = f"Ajax {resp.status}"
+                    # Try re-login
+                    if retry_count == 0:
+                        _LOGGER.info("Ajax auth error, attempting re-login...")
+                        self.session_token = None
+                        self.token_expires = None
+                        if await self.login():
+                            return await self._call_ajax_direct(endpoint, method, body, retry_count + 1)
+                    self._set_backoff()
+                    self._auth_failed = True
+                    return {"error": resp.status, "message": "Auth failed", "auth_failed": True}
+
+                if resp.status == 429:
+                    self._set_backoff()
+                    return {"error": 429, "message": "Rate limited by Ajax"}
+
+                if not resp.ok:
+                    self._last_error = f"Ajax {resp.status}"
+                    return {"error": resp.status, "message": response_text[:200]}
+
+                import json
+                try:
+                    data = json.loads(response_text)
+                except Exception:
+                    data = {"raw": response_text}
+
+                self._clear_backoff()
+                self._last_error = None
+                self._connection_status = self.STATUS_CONNECTED
+                return data
+
+        except asyncio.TimeoutError:
+            self._last_error = "Ajax request timeout"
+            return {"error": -1, "message": "Timeout"}
+        except Exception as e:
+            self._last_error = str(e)
+            return {"error": -1, "message": str(e)}
+
+    # ── Login (via gateway, then switch to direct) ──
+
     async def login(self) -> bool:
-        """Login via Connee Gateway."""
-        # If we already have a valid token, skip login
+        """Login: verify token via gateway, get API key, then login to Ajax directly."""
         if self.session_token and self.token_expires:
             if datetime.now() < self.token_expires:
-                _LOGGER.debug("Using existing valid session token")
                 return True
 
-        # Prevent concurrent login attempts
         if self._login_lock:
-            _LOGGER.debug("Login already in progress, waiting...")
             await asyncio.sleep(2)
             return self.session_token is not None
 
-        # Check backoff before attempting login
         if self._is_in_backoff():
-            remaining = (self._backoff_until - datetime.now()).total_seconds()
-            _LOGGER.error(
-                "Cannot login: in backoff period. %d seconds remaining.",
-                int(remaining)
-            )
             return False
 
         self._login_lock = True
         try:
-            result = await self._call_gateway(
-                "login",
-                {
-                    "email": self.email,
-                    "password": self.password,
-                    "deviceId": self.device_id,
-                },
-            )
+            # Step 1: Get API key from gateway (verifies Connee token)
+            if not self._ajax_api_key:
+                key_result = await self._call_gateway("get-api-key", {"email": self.email})
+                if isinstance(key_result, dict) and "error" not in key_result:
+                    self._ajax_api_key = key_result.get("apiKey")
+                    _LOGGER.info("API key obtained from gateway")
+                else:
+                    _LOGGER.error("Failed to get API key: %s", key_result)
+                    # Fallback: try login via gateway (backward compatibility)
+                    return await self._login_via_gateway()
 
-            if isinstance(result, dict) and "error" not in result:
-                self.session_token = (
-                    result.get("sessionToken")
-                    or result.get("token")
-                    or result.get("session", {}).get("token")
-                )
-                self.user_id = (
-                    result.get("userId")
-                    or result.get("user_id")
-                    or result.get("id")
-                    or result.get("user", {}).get("id")
-                )
+            # Step 2: Login directly to Ajax API
+            password_bytes = self.password.encode("utf-8")
+            hash_bytes = hashlib.sha256(password_bytes).digest()
+            password_hex = hash_bytes.hex()
+            password_b64 = base64.b64encode(hash_bytes).decode("utf-8")
 
-                if self.session_token:
-                    self.token_expires = datetime.now() + timedelta(
-                        seconds=TOKEN_REFRESH_INTERVAL
-                    )
-                    self._clear_backoff()
-                    _LOGGER.info("Login successful via Connee Gateway (device: %s)", self.device_id[:8])
-                    return True
+            roles = ["USER", "PRO"]
+            formats = [("hex", password_hex), ("base64", password_b64)]
 
-            error_msg = result.get("message", "Login failed") if isinstance(result, dict) else "Login failed"
-            _LOGGER.error("Login failed: %s", error_msg)
+            for role in roles:
+                for fmt_name, pwd_hash in formats:
+                    try:
+                        result = await self._call_ajax_direct(
+                            "/login",
+                            "POST",
+                            {"login": self.email.strip(), "passwordHash": pwd_hash, "userRole": role},
+                        )
+                        if isinstance(result, dict) and "error" not in result:
+                            self.session_token = (
+                                result.get("sessionToken")
+                                or result.get("token")
+                                or result.get("session", {}).get("token")
+                            )
+                            self.user_id = (
+                                result.get("userId")
+                                or result.get("user_id")
+                                or result.get("id")
+                                or result.get("user", {}).get("id")
+                            )
+                            if self.session_token:
+                                self.token_expires = datetime.now() + timedelta(seconds=TOKEN_REFRESH_INTERVAL)
+                                self._clear_backoff()
+                                _LOGGER.info("Direct Ajax login successful (role=%s, hash=%s)", role, fmt_name)
+                                return True
+                    except Exception as e:
+                        _LOGGER.debug("Login attempt failed: role=%s, hash=%s: %s", role, fmt_name, e)
+
+            _LOGGER.error("All direct login attempts failed")
             return False
         finally:
             self._login_lock = False
 
+    async def _login_via_gateway(self) -> bool:
+        """Fallback: login via Connee Gateway (backward compatibility)."""
+        result = await self._call_gateway("login", {
+            "email": self.email,
+            "password": self.password,
+            "deviceId": self.device_id,
+        })
+        if isinstance(result, dict) and "error" not in result:
+            self.session_token = (
+                result.get("sessionToken")
+                or result.get("token")
+                or result.get("session", {}).get("token")
+            )
+            self.user_id = (
+                result.get("userId")
+                or result.get("user_id")
+                or result.get("id")
+                or result.get("user", {}).get("id")
+            )
+            if self.session_token:
+                self.token_expires = datetime.now() + timedelta(seconds=TOKEN_REFRESH_INTERVAL)
+                self._clear_backoff()
+                _LOGGER.info("Gateway login successful (fallback mode)")
+                return True
+        return False
+
     async def refresh_token(self) -> bool:
         """Refresh session token."""
-        # Clear current token to force re-login
         self.session_token = None
         self.token_expires = None
         return await self.login()
 
+    # ── Data fetching (all direct to Ajax) ──
+
     async def get_hubs(self) -> List[Dict[str, Any]]:
-        """Get user hubs."""
+        """Get user hubs (direct Ajax call)."""
         if not self.user_id:
             return []
-
-        result = await self._call_gateway("get-user-hubs", {
-            "userId": self.user_id,
-            "email": self.email,  # Pass email to update last_used_at
-        })
-
+        result = await self._call_ajax_direct(f"/user/{self.user_id}/hubs")
         if isinstance(result, dict) and "error" in result:
             return []
-
-        hubs_raw = []
-        if isinstance(result, list):
-            hubs_raw = result
-        elif isinstance(result, dict):
-            hubs_raw = result.get("hubs") or result.get("data") or []
-
+        hubs_raw = result if isinstance(result, list) else []
         hubs = []
         for h in hubs_raw:
             hub_id = h.get("hubId") or h.get("id") or h.get("deviceId")
             if hub_id:
-                hubs.append({
-                    "id": hub_id,
-                    "hubId": hub_id,
-                    "name": h.get("name") or h.get("hubName") or f"Hub {hub_id}",
-                    **h,
-                })
+                hubs.append({"id": hub_id, "hubId": hub_id, "name": h.get("name") or f"Hub {hub_id}", **h})
         return hubs
 
     async def get_hub_devices(self, hub_id: str) -> List[Dict[str, Any]]:
-        """Get hub devices."""
+        """Get hub devices (direct Ajax call)."""
         if not self.user_id:
             return []
-
-        result = await self._call_gateway(
-            "get-hub-devices",
-            {
-                "userId": self.user_id,
-                "hubId": hub_id,
-                "email": self.email,  # Pass email to update last_used_at
-            },
-        )
-
+        result = await self._call_ajax_direct(f"/user/{self.user_id}/hubs/{hub_id}/devices")
         if isinstance(result, list):
             return result
         if isinstance(result, dict) and "error" in result:
             return []
-
-        devices = result.get("devices") or result.get("data") or []
-        return devices if isinstance(devices, list) else []
+        return []
 
     async def get_hub_state(self, hub_id: str) -> Dict[str, Any]:
-        """Get hub state."""
+        """Get hub state (direct Ajax call)."""
         if not self.user_id:
             return {}
-
-        result = await self._call_gateway(
-            "get-hub",
-            {
-                "userId": self.user_id,
-                "hubId": hub_id,
-                "email": self.email,  # Pass email to update last_used_at
-            },
-        )
-
+        result = await self._call_ajax_direct(f"/user/{self.user_id}/hubs/{hub_id}")
         if isinstance(result, dict) and "error" in result:
             return {}
         return result if isinstance(result, dict) else {}
 
     async def get_device_states(self, hub_id: str) -> List[Dict[str, Any]]:
-        """Get device states."""
+        """Get all device states (direct Ajax calls, batched)."""
         if not self.user_id:
             return []
-        result = await self._call_gateway("get-all-device-states", {
-            "userId": self.user_id,
-            "hubId": hub_id,
-            "email": self.email,  # Pass email to update last_used_at
-        })
-        if "error" in result:
+
+        # First get device list
+        devices = await self.get_hub_devices(hub_id)
+        if not devices:
             return []
-        return result if isinstance(result, list) else result.get("data", [])
+
+        # Fetch individual device states in batches
+        device_states = []
+        for i in range(0, len(devices), DEVICE_STATE_BATCH_SIZE):
+            batch = devices[i:i + DEVICE_STATE_BATCH_SIZE]
+            tasks = []
+            for device in batch:
+                dev_id = device.get("id") or device.get("deviceId")
+                if dev_id:
+                    tasks.append(self._get_single_device_state(hub_id, dev_id))
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for r in results:
+                    if isinstance(r, dict) and "error" not in r:
+                        device_states.append(r)
+            # Small delay between batches
+            if i + DEVICE_STATE_BATCH_SIZE < len(devices):
+                await asyncio.sleep(0.1)
+
+        return device_states
+
+    async def _get_single_device_state(self, hub_id: str, device_id: str) -> Dict[str, Any]:
+        """Get single device state."""
+        result = await self._call_ajax_direct(f"/user/{self.user_id}/hubs/{hub_id}/devices/{device_id}")
+        if isinstance(result, dict) and "error" not in result:
+            result["id"] = device_id
+            return result
+        return {"id": device_id, "error": True}
 
     async def arm_hub(self, hub_id: str, arm_state: str) -> tuple[bool, str]:
-        """Arm/disarm hub. Returns (success, error_message)."""
+        """Arm/disarm hub (direct Ajax call)."""
         if not self.user_id:
             return False, "User ID not set"
-        
-        result = await self._call_gateway("arm-hub", {
-            "userId": self.user_id,
-            "hubId": hub_id,
-            "armState": arm_state,
-        })
-        
+
+        command_map = {
+            "ARM": "ARM", "DISARM": "DISARM",
+            "ARM_NIGHT": "NIGHT_MODE_ON", "NIGHT_ARM": "NIGHT_MODE_ON",
+            "NIGHT_MODE_ON": "NIGHT_MODE_ON", "NIGHT_MODE_OFF": "NIGHT_MODE_OFF",
+            "ARM_PARTIAL": "ARM", "PARTIAL_ARM": "ARM",
+        }
+        command = command_map.get(arm_state, arm_state)
+
+        result = await self._call_ajax_direct(
+            f"/user/{self.user_id}/hubs/{hub_id}/commands/arming",
+            "PUT",
+            {"command": command, "ignoreProblems": True},
+        )
         if isinstance(result, dict) and "error" in result:
-            error_msg = result.get("message", "Unknown error")
-            is_auth_failed = result.get("auth_failed", False)
-            _LOGGER.error("arm_hub failed: %s (auth_failed=%s)", error_msg, is_auth_failed)
-            return False, error_msg
-        
+            return False, result.get("message", "Unknown error")
         return True, ""
 
     async def control_valve(self, device_id: str, valve_state: str) -> bool:
-        """Control WaterStop valve (OPEN/CLOSED)."""
+        """Control WaterStop valve (direct Ajax call)."""
         if not self.user_id or not self.hub_id:
-            _LOGGER.error("Cannot control valve: user_id or hub_id not set")
             return False
-        
-        _LOGGER.info("Controlling valve %s: %s", device_id, valve_state)
-        
-        result = await self._call_gateway("control-valve", {
-            "userId": self.user_id,
-            "hubId": self.hub_id,
-            "targetDeviceId": device_id,
-            "valveState": valve_state,
-        })
-        
-        if isinstance(result, dict) and "error" in result:
-            _LOGGER.error("Valve control failed: %s", result.get("message", "Unknown error"))
-            return False
-        
-        _LOGGER.info("Valve control successful for %s", device_id)
-        return True
+        result = await self._call_ajax_direct(
+            f"/user/{self.user_id}/hubs/{self.hub_id}/devices/{device_id}/commands/automation",
+            "PUT",
+            {"state": valve_state},
+        )
+        return not (isinstance(result, dict) and "error" in result)
 
     async def control_switch(self, device_id: str, switch_state: bool) -> bool:
-        """Control Socket/WallSwitch/Relay (ON/OFF)."""
+        """Control Socket/Relay (direct Ajax call)."""
         if not self.user_id or not self.hub_id:
-            _LOGGER.error("Cannot control switch: user_id or hub_id not set")
             return False
-        
         state_str = "ON" if switch_state else "OFF"
-        _LOGGER.info("Controlling switch %s: %s", device_id, state_str)
-        
-        result = await self._call_gateway("control-switch", {
-            "userId": self.user_id,
-            "hubId": self.hub_id,
-            "targetDeviceId": device_id,
-            "switchState": state_str,
-        })
-        
-        if isinstance(result, dict) and "error" in result:
-            _LOGGER.error("Switch control failed: %s", result.get("message", "Unknown error"))
-            return False
-        
-        _LOGGER.info("Switch control successful for %s", device_id)
-        return True
+        result = await self._call_ajax_direct(
+            f"/user/{self.user_id}/hubs/{self.hub_id}/devices/{device_id}/commands/switch",
+            "PUT",
+            {"state": state_str},
+        )
+        return not (isinstance(result, dict) and "error" in result)
