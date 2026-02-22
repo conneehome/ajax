@@ -1,7 +1,7 @@
 # Ajax Systems by Connee - Integrazione Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.3.11-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
 
 **Integrazione ufficiale Connee** - Sistema di sicurezza Ajax per Home Assistant.
 
