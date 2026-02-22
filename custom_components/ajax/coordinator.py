@@ -9,7 +9,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .api import ConneeAlarmApiClient
-from .const import DOMAIN, DEFAULT_SCAN_INTERVAL
+from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, BACKOFF_MAX_INTERVAL, BACKOFF_STEP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +32,27 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
         self.hub_id = hub_id
         self._last_forced_login: datetime | None = None
         self._consecutive_failures = 0
+        self._backoff_failures = 0
+
+    def _apply_backoff(self):
+        """Increase polling interval on failure (backoff)."""
+        self._backoff_failures += 1
+        new_interval = min(
+            DEFAULT_SCAN_INTERVAL + (self._backoff_failures * BACKOFF_STEP),
+            BACKOFF_MAX_INTERVAL,
+        )
+        self.update_interval = timedelta(seconds=new_interval)
+        _LOGGER.warning(
+            "Backoff: polling interval increased to %ds after %d failures",
+            new_interval, self._backoff_failures,
+        )
+
+    def _reset_backoff(self):
+        """Reset polling interval to default on success."""
+        if self._backoff_failures > 0:
+            _LOGGER.info("Backoff reset: polling interval back to %ds", DEFAULT_SCAN_INTERVAL)
+            self._backoff_failures = 0
+            self.update_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from API."""
@@ -97,6 +118,9 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
                         continue
                     states_map[str(raw_id)] = state
 
+            # Success: reset backoff to fast polling
+            self._reset_backoff()
+
             return {
                 "hub_state": hub_state,
                 "devices": devices,
@@ -105,4 +129,6 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
         except ConfigEntryAuthFailed:
             raise  # Re-raise auth failures
         except Exception as err:
+            # Apply backoff on failure (slow down polling temporarily)
+            self._apply_backoff()
             raise UpdateFailed(f"Error fetching data: {err}") from err

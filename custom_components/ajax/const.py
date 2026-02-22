@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.0.0"  # v2: Direct Ajax API calls (no cloud proxy for polling)
+VERSION = "2.1.0"  # v2.1: Fast 5s polling with auto-backoff (direct Ajax API)
 
 # Config
 CONF_HUB_ID = "hub_id"
@@ -9,8 +9,10 @@ CONF_DEVICE_ID = "device_id"
 CONF_POLLING_INTERVAL = "polling_interval"
 
 # Defaults
-DEFAULT_POLLING_INTERVAL = 60
-DEFAULT_SCAN_INTERVAL = 60
+DEFAULT_POLLING_INTERVAL = 5
+DEFAULT_SCAN_INTERVAL = 5
+BACKOFF_MAX_INTERVAL = 30  # Max backoff interval in seconds
+BACKOFF_STEP = 5  # Increase interval by this much on each failure
 
 # API - Connee Gateway (used ONLY for login/token verification)
 CONNEE_GATEWAY_URL = "https://hmxxkxzkovgyzqmrzapz.supabase.co/functions/v1/ajax-api"
