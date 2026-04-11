@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import DOMAIN, MANUFACTURER, DEVICE_TYPE_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
+from .const import DOMAIN, MANUFACTURER, DEVICE_TYPE_MAP, DEVICE_CLASS_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
 from .coordinator import ConneeAlarmDataCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,6 +101,7 @@ async def async_setup_entry(
     entities.append(ConneeAlarmSensorOkSensor(coordinator, entry))
     entities.append(ConneeAlarmSensorAlarmSensor(coordinator, entry))
     entities.append(ConneeAlarmSensorOfflineSensor(coordinator, entry))
+    entities.append(ConneeAlarmContactOpenSensor(coordinator, entry))
 
 
     for device in devices:
@@ -700,3 +701,63 @@ class ConneeAlarmSensorOfflineSensor(CoordinatorEntity, SensorEntity):
             if state.get("online", state.get("isOnline")) is False:
                 offline.append(d.get("deviceName") or d.get("name") or device_id)
         return {"offline_devices": offline}
+
+
+class ConneeAlarmContactOpenSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostic sensor counting OPEN contact (door/window) sensors."""
+
+    _attr_has_entity_name = False
+    _attr_icon = "mdi:door-open"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"ajax_{entry.entry_id}_contacts_open"
+        self._attr_name = "Connee Contatti Aperti"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"connee_gateway_{entry.entry_id}")},
+            name="Connee Gateway",
+            manufacturer=MANUFACTURER,
+            model="Cloud Gateway",
+        )
+
+    @property
+    def native_value(self) -> int:
+        """Return count of open contact sensors."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        count = 0
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            dtype = _get_device_type(d)
+            # Only count door/window contact sensors
+            device_class = DEVICE_CLASS_MAP.get(dtype)
+            if device_class != "door":
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            # reedClosed=False means door/window is open
+            if state.get("reedClosed") is False:
+                count += 1
+        return count
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return list of open contact devices."""
+        devices = self.coordinator.data.get("devices", [])
+        states = self.coordinator.data.get("device_states", {})
+        open_contacts = []
+        for d in devices:
+            device_id = _get_device_id(d)
+            if not device_id:
+                continue
+            dtype = _get_device_type(d)
+            if DEVICE_CLASS_MAP.get(dtype) != "door":
+                continue
+            state = states.get(device_id, {}) if isinstance(states, dict) else {}
+            if state.get("reedClosed") is False:
+                open_contacts.append(d.get("deviceName") or d.get("name") or device_id)
+        return {"open_contacts": open_contacts}

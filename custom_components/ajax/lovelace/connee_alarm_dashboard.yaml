@@ -53,6 +53,10 @@ views:
             entity: sensor.connee_sensori_offline
             name: Offline
             icon: mdi:wifi-off
+          - type: entity
+            entity: sensor.connee_contatti_aperti
+            name: Contatti Aperti
+            icon: mdi:door-open
 
       # Sensori Porte/Finestre
       - type: entities
