@@ -15,6 +15,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Force re-login every 12 hours as a safety measure
 FORCE_RELOGIN_INTERVAL_HOURS = 12
+CONSECUTIVE_TRANSIENT_FAILURES_BEFORE_UNAVAILABLE = 4
+LAST_GOOD_DATA_MAX_AGE_SECONDS = 600
 
 
 class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
@@ -33,6 +35,9 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
         self._last_forced_login: datetime | None = None
         self._consecutive_failures = 0
         self._backoff_failures = 0
+        self._transient_failures = 0
+        self._last_good_data: Dict[str, Any] | None = None
+        self._last_good_timestamp: datetime | None = None
 
     def _apply_backoff(self):
         """Increase polling interval on failure (backoff)."""
@@ -120,15 +125,44 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
 
             # Success: reset backoff to fast polling
             self._reset_backoff()
+            self._transient_failures = 0
 
-            return {
+            result = {
                 "hub_state": hub_state,
                 "devices": devices,
                 "device_states": states_map,
             }
+            self._last_good_data = result
+            self._last_good_timestamp = now
+
+            return result
         except ConfigEntryAuthFailed:
             raise  # Re-raise auth failures
         except Exception as err:
-            # Apply backoff on failure (slow down polling temporarily)
             self._apply_backoff()
+            self._transient_failures += 1
+
+            cache_is_usable = (
+                self._last_good_data is not None
+                and self._last_good_timestamp is not None
+                and (datetime.now() - self._last_good_timestamp).total_seconds()
+                    < LAST_GOOD_DATA_MAX_AGE_SECONDS
+            )
+
+            if (
+                self._transient_failures < CONSECUTIVE_TRANSIENT_FAILURES_BEFORE_UNAVAILABLE
+                and cache_is_usable
+            ):
+                _LOGGER.warning(
+                    "Errore transitorio (tentativo %d/%d), uso ultimo stato valido: %s",
+                    self._transient_failures,
+                    CONSECUTIVE_TRANSIENT_FAILURES_BEFORE_UNAVAILABLE,
+                    err,
+                )
+                return self._last_good_data
+
+            _LOGGER.error(
+                "Errore persistente dopo %d tentativi, entità marcate unavailable: %s",
+                self._transient_failures, err,
+            )
             raise UpdateFailed(f"Error fetching data: {err}") from err
