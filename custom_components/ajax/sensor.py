@@ -605,23 +605,26 @@ class ConneeAlarmSensorAlarmSensor(CoordinatorEntity, SensorEntity):
             if DEVICE_TYPE_MAP.get(dtype) == "alarm_control_panel":
                 continue
             state = states.get(device_id, {}) if isinstance(states, dict) else {}
-            # Check various alarm indicators
+            # Only real anomalies: exclude open contacts (reedClosed=False) and
+            # normal PIR motion detection (active=True). Count only triggered alarms
+            # or critical events (leak, smoke, fire, glass break, tamper).
             is_alarm = (
-                state.get("active") is True
-                or state.get("triggered") is True
+                state.get("triggered") is True
                 or state.get("alarm") is True
                 or str(state.get("state", "")).upper() == "ALARM"
                 or str(state.get("alarmState", "")).upper() == "ALARM"
-                or state.get("reedClosed") is False  # Door open = alarm for door sensors
                 or state.get("leakDetected") is True
                 or state.get("smokeAlarmDetected") is True
                 or state.get("temperatureAlarmDetected") is True
                 or state.get("glassBreakDetected") is True
+                or state.get("tamperAlarm") is True
+                or state.get("fireAlarm") is True
             )
             if is_alarm:
                 count += 1
                 alarmed_devices.append(d.get("deviceName") or d.get("name") or device_id)
         return count
+
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -635,14 +638,18 @@ class ConneeAlarmSensorAlarmSensor(CoordinatorEntity, SensorEntity):
                 continue
             state = states.get(device_id, {}) if isinstance(states, dict) else {}
             is_alarm = (
-                state.get("active") is True
-                or state.get("triggered") is True
+                state.get("triggered") is True
                 or state.get("alarm") is True
                 or str(state.get("state", "")).upper() == "ALARM"
-                or state.get("reedClosed") is False
+                or str(state.get("alarmState", "")).upper() == "ALARM"
                 or state.get("leakDetected") is True
                 or state.get("smokeAlarmDetected") is True
+                or state.get("temperatureAlarmDetected") is True
+                or state.get("glassBreakDetected") is True
+                or state.get("tamperAlarm") is True
+                or state.get("fireAlarm") is True
             )
+
             if is_alarm:
                 alarmed.append(d.get("deviceName") or d.get("name") or device_id)
         return {"alarmed_devices": alarmed}
