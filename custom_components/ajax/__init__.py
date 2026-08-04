@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, DEVICE_TYPE_MAP, DEVICE_CLASS_MAP, BATTERY_DEVICES, TEMPERATURE_DEVICES
 from .coordinator import ConneeAlarmDataCoordinator
@@ -192,9 +193,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Login to API (with backoff protection)
     if not await api.login():
+        last_error = str(getattr(api, "_last_error", "") or "")
+        transient_markers = (
+            "dns", "timeout", "cannot connect", "temporary failure",
+            "connection reset", "network", "server disconnected", "ssl",
+        )
+        if any(m in last_error.lower() for m in transient_markers) or not last_error:
+            _LOGGER.warning(
+                "Connee Alarm not reachable yet (%s). Home Assistant will retry automatically.",
+                last_error or "unknown network error",
+            )
+            raise ConfigEntryNotReady(
+                f"Connee gateway/Ajax temporarily unreachable: {last_error or 'network error'}"
+            )
         _LOGGER.error(
-            "Failed to login to Connee Alarm API. "
-            "If this persists, check credentials or wait for any Ajax ban to expire."
+            "Failed to login to Connee Alarm API (%s). "
+            "If this persists, check credentials or wait for any Ajax ban to expire.",
+            last_error,
         )
         return False
 

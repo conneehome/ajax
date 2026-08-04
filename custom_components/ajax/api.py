@@ -130,38 +130,53 @@ class ConneeAlarmApiClient:
         request_body = body or {}
         request_body["deviceId"] = self.device_id
 
-        try:
-            timeout = ClientTimeout(total=30)
-            async with self.session.request(
-                "POST", url, json=request_body, headers=headers, timeout=timeout
-            ) as resp:
-                result = await resp.json()
+        # Retry on transient network/DNS errors (HA host DNS can fail right after boot)
+        NETWORK_RETRIES = 3
+        RETRY_DELAYS = [2, 5, 10]
+        last_network_error = None
 
-                if resp.status in (401, 403):
-                    error_msg = result.get("message", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
-                    self._last_error = f"{resp.status}: {error_msg}"
-                    self._set_backoff()
-                    return {"error": resp.status, "message": error_msg, "auth_failed": True}
+        for attempt in range(NETWORK_RETRIES):
+            try:
+                timeout = ClientTimeout(total=30)
+                async with self.session.request(
+                    "POST", url, json=request_body, headers=headers, timeout=timeout
+                ) as resp:
+                    result = await resp.json()
 
-                if resp.status == 429:
-                    self._set_backoff()
-                    return {"error": 429, "message": "Rate limited"}
+                    if resp.status in (401, 403):
+                        error_msg = result.get("message", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
+                        self._last_error = f"{resp.status}: {error_msg}"
+                        self._set_backoff()
+                        return {"error": resp.status, "message": error_msg, "auth_failed": True}
 
-                if resp.status == 200 and isinstance(result, dict) and result.get("success"):
-                    self._clear_backoff()
-                    self._last_error = None
-                    self._auth_failed = False
-                    return result.get("data")
+                    if resp.status == 429:
+                        self._set_backoff()
+                        return {"error": 429, "message": "Rate limited"}
 
-                error_msg = result.get("error", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
-                self._last_error = str(error_msg)
-                return {"error": resp.status, "message": error_msg}
-        except asyncio.TimeoutError:
-            self._last_error = "Gateway timeout"
-            return {"error": -1, "message": "Gateway timeout"}
-        except Exception as e:
-            self._last_error = str(e)
-            return {"error": -1, "message": str(e)}
+                    if resp.status == 200 and isinstance(result, dict) and result.get("success"):
+                        self._clear_backoff()
+                        self._last_error = None
+                        self._auth_failed = False
+                        return result.get("data")
+
+                    error_msg = result.get("error", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
+                    self._last_error = str(error_msg)
+                    return {"error": resp.status, "message": error_msg}
+            except asyncio.TimeoutError:
+                last_network_error = "Gateway timeout"
+            except Exception as e:
+                last_network_error = str(e)
+
+            if attempt < NETWORK_RETRIES - 1:
+                delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+                _LOGGER.warning(
+                    "Gateway network error (%s). Retry %d/%d in %ss...",
+                    last_network_error, attempt + 1, NETWORK_RETRIES - 1, delay,
+                )
+                await asyncio.sleep(delay)
+
+        self._last_error = last_network_error or "Gateway network error"
+        return {"error": -1, "message": self._last_error}
 
     # ── Direct Ajax API calls (all polling) ──
 

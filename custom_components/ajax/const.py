@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.0"  # v2.1: Fast 5s polling with auto-backoff (direct Ajax API)
+VERSION = "2.1.2"  # v2.1.2: DNS/network retry on gateway + ConfigEntryNotReady retry on setup
 
 # Config
 CONF_HUB_ID = "hub_id"
