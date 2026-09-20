@@ -53,6 +53,7 @@ class ConneeAlarmApiClient:
         self._last_error: Optional[str] = None
         self._connection_status: str = self.STATUS_DISCONNECTED
         self._auth_failed: bool = False
+        self._auth_failure_count: int = 0
 
     @property
     def connection_status(self) -> str:
@@ -157,6 +158,7 @@ class ConneeAlarmApiClient:
                         self._clear_backoff()
                         self._last_error = None
                         self._auth_failed = False
+                        self._auth_failure_count = 0
                         return result.get("data")
 
                     error_msg = result.get("error", f"HTTP {resp.status}") if isinstance(result, dict) else f"HTTP {resp.status}"
@@ -232,7 +234,10 @@ class ConneeAlarmApiClient:
                         if await self.login():
                             return await self._call_ajax_direct(endpoint, method, body, retry_count + 1)
                     self._set_backoff()
-                    self._auth_failed = True
+                    # Only consider auth permanently failed after repeated 401/403
+                    self._auth_failure_count += 1
+                    if self._auth_failure_count >= 3:
+                        self._auth_failed = True
                     return {"error": resp.status, "message": "Auth failed", "auth_failed": True}
 
                 if resp.status == 429:
@@ -251,6 +256,8 @@ class ConneeAlarmApiClient:
 
                 self._clear_backoff()
                 self._last_error = None
+                self._auth_failed = False
+                self._auth_failure_count = 0
                 self._connection_status = self.STATUS_CONNECTED
                 return data
 

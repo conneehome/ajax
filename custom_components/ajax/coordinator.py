@@ -16,7 +16,8 @@ _LOGGER = logging.getLogger(__name__)
 # Force re-login every 12 hours as a safety measure
 FORCE_RELOGIN_INTERVAL_HOURS = 12
 CONSECUTIVE_TRANSIENT_FAILURES_BEFORE_UNAVAILABLE = 4
-LAST_GOOD_DATA_MAX_AGE_SECONDS = 600
+LAST_GOOD_DATA_MAX_AGE_SECONDS = 1800
+MAX_AUTH_RECOVERY_ATTEMPTS = 5
 
 
 class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
@@ -36,6 +37,7 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
         self._consecutive_failures = 0
         self._backoff_failures = 0
         self._transient_failures = 0
+        self._auth_recovery_attempts = 0
         self._last_good_data: Dict[str, Any] | None = None
         self._last_good_timestamp: datetime | None = None
 
@@ -64,10 +66,26 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
         try:
             # Check if auth has permanently failed
             if self.api._auth_failed:
-                _LOGGER.error("Authentication permanently failed. Raising ConfigEntryAuthFailed.")
-                raise ConfigEntryAuthFailed(
-                    "Autenticazione fallita. Ricarica l'integrazione o verifica le credenziali."
+                # Self-healing: try a full re-login instead of giving up until manual reload
+                self._auth_recovery_attempts += 1
+                _LOGGER.warning(
+                    "Auth marcata fallita, tentativo di recupero automatico %d/%d",
+                    self._auth_recovery_attempts, MAX_AUTH_RECOVERY_ATTEMPTS,
                 )
+                self.api._auth_failed = False
+                self.api._auth_failure_count = 0
+                self.api.session_token = None
+                self.api.token_expires = None
+                self.api._backoff_until = None
+                if await self.api.login():
+                    _LOGGER.info("Recupero autenticazione riuscito")
+                    self._auth_recovery_attempts = 0
+                elif self._auth_recovery_attempts >= MAX_AUTH_RECOVERY_ATTEMPTS:
+                    raise ConfigEntryAuthFailed(
+                        "Autenticazione fallita. Ricarica l'integrazione o verifica le credenziali."
+                    )
+                else:
+                    raise Exception("Re-login fallito, riprovo al prossimo ciclo")
 
             # Force re-login every N hours as a safety measure against stale sessions
             now = datetime.now()

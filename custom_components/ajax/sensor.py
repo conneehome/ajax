@@ -269,7 +269,6 @@ class ConneeAlarmSensor(CoordinatorEntity, SensorEntity):
         return {
             "device_type": self._device_type,
             "connee_id": self._device_id,
-            "raw_state": state,
         }
 
 

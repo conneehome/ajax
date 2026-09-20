@@ -253,9 +253,4 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
             if k in state:
                 attrs[k] = state.get(k)
         
-        # Log raw state for debugging (only non-empty fields)
-        raw_state_summary = {k: v for k, v in state.items() if v is not None}
-        if raw_state_summary:
-            attrs["_raw_state_keys"] = list(raw_state_summary.keys())
-
         return attrs
