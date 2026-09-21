@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.4"  # v2.1.4: rimossi attributi debug volatili (_raw_state_keys, raw_state) che generavano state_changed a ogni poll
+VERSION = "2.1.5"  # v2.1.5: niente falsi "disarmed" su risposta vuota/auth scaduta (re-login+retry, ultimo stato valido)
 
 # Config
 CONF_HUB_ID = "hub_id"

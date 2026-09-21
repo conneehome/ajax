@@ -120,6 +120,21 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
             else:
                 self._consecutive_failures = 0  # Reset on success
 
+            # v2.1.5: stato centrale non valido -> re-login + un nuovo tentativo; mai pubblicare uno stato vuoto
+            def _hub_state_valid(hs) -> bool:
+                return isinstance(hs, dict) and not hs.get("auth_failed") and bool(hs.get("armState") or hs.get("state"))
+
+            if not _hub_state_valid(hub_state):
+                _LOGGER.warning("Stato centrale Ajax non valido, eseguo re-login e ritento")
+                if await self.api.refresh_token():
+                    hub_state = await self.api.get_hub_state(self.hub_id)
+            if not _hub_state_valid(hub_state):
+                if self._last_good_data is not None and self._last_good_data.get("hub_state"):
+                    _LOGGER.warning("Stato centrale Ajax ancora non valido: mantengo l'ultimo stato valido")
+                    hub_state = self._last_good_data["hub_state"]
+                else:
+                    raise UpdateFailed("Stato centrale Ajax non disponibile")
+
             # Get devices
             devices = await self.api.get_hub_devices(self.hub_id)
 
@@ -140,6 +155,12 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
                     if raw_id is None:
                         continue
                     states_map[str(raw_id)] = state
+
+            # v2.1.5: se dispositivi o stati tornano vuoti per un ciclo, riuso l'ultimo dato valido
+            if not devices and self._last_good_data and self._last_good_data.get("devices"):
+                devices = self._last_good_data["devices"]
+            if not states_map and self._last_good_data and self._last_good_data.get("device_states"):
+                states_map = self._last_good_data["device_states"]
 
             # Success: reset backoff to fast polling
             self._reset_backoff()

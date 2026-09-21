@@ -51,6 +51,7 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         super().__init__(coordinator)
         self._api = api
         self._hub_id = hub_id
+        self._last_valid_state: AlarmControlPanelState | None = None
         self._attr_unique_id = f"ajax_{hub_id}_panel"
         self._attr_name = "Pannello Allarme"
 
@@ -84,11 +85,15 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         """Return current alarm state."""
         hub_state = self.coordinator.data.get("hub_state", {})
         arm_state = str(hub_state.get("armState", hub_state.get("state", "unknown"))).upper()
-        
+
+        # v2.1.5: stato sconosciuto/vuoto -> mantieni l'ultimo stato valido (mai falso DISARMED)
+        if arm_state in ("UNKNOWN", "NONE", ""):
+            return self._last_valid_state
+
         # Ajax returns various states:
         # ARMED, DISARMED, ARMED_NIGHT_MODE_ON, DISARMED_NIGHT_MODE_ON,
         # DISARMED_NIGHT_MODE_OFF, PARTIAL, etc.
-        
+
         # Precedence matters:
         # 1) NIGHT_MODE_ON can appear with both ARMED_ and DISARMED_ prefix
         # 2) Any DISARM* state that is NOT NIGHT_MODE_ON must map to DISARMED
@@ -97,23 +102,23 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         # 4) ARMED/ARM
         # 5) NIGHT fallback (but ignore NIGHT_MODE_OFF)
         if "NIGHT_MODE_ON" in arm_state:
-            return AlarmControlPanelState.ARMED_NIGHT
-        
+            self._last_valid_state = AlarmControlPanelState.ARMED_NIGHT
+            return self._last_valid_state
         if "DISARM" in arm_state:
-            return AlarmControlPanelState.DISARMED
-        
+            self._last_valid_state = AlarmControlPanelState.DISARMED
+            return self._last_valid_state
         if "PARTIAL" in arm_state:
-            return AlarmControlPanelState.ARMED_HOME
-        
+            self._last_valid_state = AlarmControlPanelState.ARMED_HOME
+            return self._last_valid_state
         if arm_state in ("ARM", "ARMED") or ("ARMED" in arm_state and "DISARM" not in arm_state):
-            # ARMED, ARMED_NIGHT_MODE_OFF, etc. = armed away
-            return AlarmControlPanelState.ARMED_AWAY
-        
+            self._last_valid_state = AlarmControlPanelState.ARMED_AWAY
+            return self._last_valid_state
         if "NIGHT" in arm_state and "NIGHT_MODE_OFF" not in arm_state:
-            return AlarmControlPanelState.ARMED_NIGHT
-        
-        # Default to disarmed for unknown states
-        return AlarmControlPanelState.DISARMED
+            self._last_valid_state = AlarmControlPanelState.ARMED_NIGHT
+            return self._last_valid_state
+
+        # v2.1.5: stato non riconosciuto -> mantengo l'ultimo stato valido (mai "disarmed" di default)
+        return self._last_valid_state
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Disarm the alarm."""
