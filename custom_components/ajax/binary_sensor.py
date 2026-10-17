@@ -123,10 +123,10 @@ def _extra_contact_open(state):
 
 
 def _use_extra_contact(state) -> bool:
-    """v2.1.6: contatto esterno abilitato E reed interno disabilitato."""
+    """v2.1.7: contatto esterno abilitato E reed interno disabilitato."""
     if not isinstance(state, dict) or state.get("extraContactAware") is not True:
         return False
-    for k in ("reedAware", "reedEnabled", "internalReedAware", "reedSwitchAware"):
+    for k in ("reedContactAware", "reedAware", "reedEnabled", "internalReedAware", "reedSwitchAware"):
         if state.get(k) is False:
             return True
     return False

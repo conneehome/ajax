@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.6"  # v2.1.6: binary_sensor "Contatto esterno" DoorProtect + diagnostica raw_keys
+VERSION = "2.1.7"  # v2.1.7: flag reed interno reale (reedContactAware) in _use_extra_contact
 
 # Config
 CONF_HUB_ID = "hub_id"
