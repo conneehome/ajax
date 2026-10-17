@@ -86,6 +86,52 @@ def _get_device_id(device: dict) -> str | None:
     return raw_id or None
 
 
+EXTRA_CONTACT_KEYS = ("extraContactClosed", "externalContactClosed", "extraContactState", "wiredContactClosed")
+
+
+def _extra_contact_key(state) -> str | None:
+    """v2.1.6: primo campo contatto esterno presente nello stato."""
+    if not isinstance(state, dict):
+        return None
+    for k in EXTRA_CONTACT_KEYS:
+        if state.get(k) is not None:
+            return k
+    return None
+
+
+def _extra_contact_open(state):
+    """v2.1.6: True = aperto, False = chiuso, None = sconosciuto."""
+    key = _extra_contact_key(state)
+    if key is None:
+        return None
+    val = state.get(key)
+    if key.endswith("State"):
+        v = str(val).strip().upper()
+        if v in ("OPEN", "OPENED", "TRUE", "1", "ON"):
+            return True
+        if v in ("CLOSE", "CLOSED", "FALSE", "0", "OFF"):
+            return False
+        return None
+    if isinstance(val, bool):
+        return not val
+    v = str(val).strip().upper()
+    if v in ("TRUE", "1", "CLOSED"):
+        return False
+    if v in ("FALSE", "0", "OPEN"):
+        return True
+    return None
+
+
+def _use_extra_contact(state) -> bool:
+    """v2.1.6: contatto esterno abilitato E reed interno disabilitato."""
+    if not isinstance(state, dict) or state.get("extraContactAware") is not True:
+        return False
+    for k in ("reedAware", "reedEnabled", "internalReedAware", "reedSwitchAware"):
+        if state.get(k) is False:
+            return True
+    return False
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -108,12 +154,17 @@ async def async_setup_entry(
         platform = DEVICE_TYPE_MAP.get(device_type)
 
         # Primary binary-sensor types (door/motion/leak/smoke...)
+        state = states.get(device_id, {}) if isinstance(states, dict) else {}
+
+        # v2.1.6: contatto esterno separato (solo DoorProtect*, solo se il campo esiste)
+        if "doorprotect" in str(device_type).lower().replace("_", "").replace(" ", "") and _extra_contact_key(state):
+            entities.append(ConneeAlarmExtraContactSensor(coordinator, device))
+
         if platform == "binary_sensor":
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
             continue
 
         # Fallback: if state payload contains door-like fields, expose it anyway
-        state = states.get(device_id, {}) if isinstance(states, dict) else {}
         if any(k in state for k in ("reedClosed", "openState", "magneticState", "contactState")):
             entities.append(ConneeAlarmBinarySensor(coordinator, device))
 
@@ -154,6 +205,12 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """Return true if sensor is on."""
         states = self.coordinator.data.get("device_states", {})
         state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
+
+        # v2.1.6: contatto esterno abilitato e reed interno disabilitato -> usa contatto esterno
+        if _use_extra_contact(state):
+            extra_open = _extra_contact_open(state)
+            if extra_open is not None:
+                return extra_open
 
         # Door sensors: reedClosed=false => OPEN => ON
         reed_closed = state.get("reedClosed")
@@ -252,5 +309,43 @@ class ConneeAlarmBinarySensor(CoordinatorEntity, BinarySensorEntity):
         for k in useful_keys:
             if k in state:
                 attrs[k] = state.get(k)
-        
+
+        # v2.1.6 diagnostica: nomi reali dei campi (contatto esterno)
+        if isinstance(state, dict):
+            attrs["raw_keys"] = sorted(str(k) for k in state.keys())
+            attrs["extra_contact_raw"] = {
+                str(k): v for k, v in sorted(state.items(), key=lambda kv: str(kv[0]))
+                if any(t in str(k).lower() for t in ("extra", "contact", "wired", "aware"))
+            }
+
         return attrs
+
+
+class ConneeAlarmExtraContactSensor(CoordinatorEntity, BinarySensorEntity):
+    """v2.1.6: contatto esterno DoorProtect / DoorProtect Plus (on = aperto)."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Contatto esterno"
+    _attr_device_class = BinarySensorDeviceClass.DOOR
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict):
+        """Initialize."""
+        super().__init__(coordinator)
+        self._device = device
+        self._device_id = _get_device_id(device)
+        self._device_type = _get_device_type(device)
+        display_name = _get_display_name(device, self._device_type)
+        self._attr_unique_id = f"ajax_{self._device_id}_extra_contact"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            name=display_name,
+            manufacturer=MANUFACTURER,
+            model=self._device_type,
+        )
+
+    @property
+    def is_on(self):
+        """Return true if external contact is open."""
+        states = self.coordinator.data.get("device_states", {})
+        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
+        return _extra_contact_open(state)

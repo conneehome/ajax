@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.5"  # v2.1.5: niente falsi "disarmed" su risposta vuota/auth scaduta (re-login+retry, ultimo stato valido)
+VERSION = "2.1.6"  # v2.1.6: binary_sensor "Contatto esterno" DoorProtect + diagnostica raw_keys
 
 # Config
 CONF_HUB_ID = "hub_id"
