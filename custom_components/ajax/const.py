@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.7"  # v2.1.7: flag reed interno reale (reedContactAware) in _use_extra_contact
+VERSION = "2.1.8"  # v2.1.8: valvola WaterStop apri/chiudi (comando ufficiale /command SWITCH_ON/OFF)
 
 # Config
 CONF_HUB_ID = "hub_id"
