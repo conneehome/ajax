@@ -138,6 +138,11 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
             # Get devices
             devices = await self.api.get_hub_devices(self.hub_id)
 
+            # v2.1.9: zone (gruppi), sola lettura; se non rispondono riuso le ultime
+            groups = await self.api.get_hub_groups(self.hub_id)
+            if not groups and self._last_good_data and self._last_good_data.get("groups"):
+                groups = self._last_good_data["groups"]
+
             # Get device states
             device_states = await self.api.get_device_states(self.hub_id)
 
@@ -170,6 +175,7 @@ class ConneeAlarmDataCoordinator(DataUpdateCoordinator):
                 "hub_state": hub_state,
                 "devices": devices,
                 "device_states": states_map,
+                "groups": groups,
             }
             self._last_good_data = result
             self._last_good_timestamp = now

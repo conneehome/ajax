@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.1.8"  # v2.1.8: valvola WaterStop apri/chiudi (comando ufficiale /command SWITCH_ON/OFF)
+VERSION = "2.1.9"  # v2.1.8: valvola WaterStop apri/chiudi (comando ufficiale /command SWITCH_ON/OFF)
 
 # Config
 CONF_HUB_ID = "hub_id"

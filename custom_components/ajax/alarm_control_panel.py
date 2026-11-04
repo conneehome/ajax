@@ -31,7 +31,13 @@ async def async_setup_entry(
     api = data["api"]
     hub_id = data["hub_id"]
 
-    async_add_entities([ConneeAlarmControlPanel(coordinator, api, hub_id)])
+    entities = [ConneeAlarmControlPanel(coordinator, api, hub_id)]
+    # v2.1.9: una entita' di sola lettura per ogni zona (gruppo) della centrale
+    for g in (coordinator.data.get("groups") or []):
+        gid = g.get("id") or g.get("groupId")
+        if gid:
+            entities.append(ConneeAlarmGroupPanel(coordinator, hub_id, str(gid), g.get("groupName") or g.get("name") or f"Zona {gid}"))
+    async_add_entities(entities)
 
 
 class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
@@ -147,3 +153,45 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
         if not success:
             raise HomeAssistantError(f"Errore Ajax: {error_msg}. Prova a ricaricare l'integrazione.")
         await self.coordinator.async_request_refresh()
+
+
+class ConneeAlarmGroupPanel(CoordinatorEntity, AlarmControlPanelEntity):
+    """Zona (gruppo) Ajax: solo lettura, inserita o disinserita."""
+
+    _attr_has_entity_name = False
+    _attr_supported_features = AlarmControlPanelEntityFeature(0)
+    _attr_code_arm_required = False
+
+    def __init__(self, coordinator, hub_id: str, group_id: str, name: str):
+        super().__init__(coordinator)
+        self._hub_id = hub_id
+        self._group_id = group_id
+        self._attr_unique_id = f"ajax_{hub_id}_group_{group_id}"
+        self._attr_name = f"Zona {name}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, hub_id)})
+
+    @property
+    def _group(self) -> dict:
+        for g in (self.coordinator.data.get("groups") or []):
+            if str(g.get("id") or g.get("groupId")) == self._group_id:
+                return g
+        return {}
+
+    @property
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        g = self._group
+        raw = g.get("state", g.get("armState", g.get("groupState", g.get("armed"))))
+        if isinstance(raw, bool):
+            return AlarmControlPanelState.ARMED_AWAY if raw else AlarmControlPanelState.DISARMED
+        t = str(raw or "").upper()
+        if not t or t in ("UNKNOWN", "NONE"):
+            return None
+        if "DISARM" in t:
+            return AlarmControlPanelState.DISARMED
+        if "ARM" in t:
+            return AlarmControlPanelState.ARMED_AWAY
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"group_id": self._group_id, "dati_zona": self._group}
