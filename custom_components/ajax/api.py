@@ -398,6 +398,16 @@ class ConneeAlarmApiClient:
             return []
         return []
 
+    async def get_hub_groups(self, hub_id: str) -> List[Dict[str, Any]]:
+        """Zone (gruppi) della centrale, sola lettura. Lista vuota se la centrale non usa i gruppi."""
+        if not self.user_id:
+            return []
+        try:
+            result = await self._call_ajax_direct(f"/user/{self.user_id}/hubs/{hub_id}/groups")
+        except Exception:
+            return []
+        return result if isinstance(result, list) else []
+
     async def get_hub_state(self, hub_id: str) -> Dict[str, Any]:
         """Get hub state (direct Ajax call)."""
         if not self.user_id:
