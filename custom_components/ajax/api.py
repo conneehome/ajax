@@ -468,15 +468,24 @@ class ConneeAlarmApiClient:
         return True, ""
 
     async def control_valve(self, device_id: str, valve_state: str) -> bool:
-        """Control WaterStop valve (direct Ajax call)."""
+        """Control WaterStop valve (direct Ajax call).
+
+        Comando ufficiale provato il 3/11/2026: POST .../devices/{id}/command
+        con {"command": "SWITCH_ON"|"SWITCH_OFF", "deviceType": "WaterStop"}
+        (SWITCH_ON = apre, SWITCH_OFF = chiude). NIENTE additionalParam (422).
+        """
         if not self.user_id or not self.hub_id:
             return False
+        command = "SWITCH_ON" if str(valve_state).upper() in ("OPEN", "ON") else "SWITCH_OFF"
         result = await self._call_ajax_direct(
-            f"/user/{self.user_id}/hubs/{self.hub_id}/devices/{device_id}/commands/automation",
-            "PUT",
-            {"state": valve_state},
+            f"/user/{self.user_id}/hubs/{self.hub_id}/devices/{device_id}/command",
+            "POST",
+            {"command": command, "deviceType": "WaterStop"},
         )
-        return not (isinstance(result, dict) and "error" in result)
+        if isinstance(result, dict) and "error" in result:
+            _LOGGER.error("Valve control failed for %s: %s", device_id, result)
+            return False
+        return True
 
     async def control_switch(self, device_id: str, switch_state: bool) -> bool:
         """Control Socket/Relay (direct Ajax call)."""
