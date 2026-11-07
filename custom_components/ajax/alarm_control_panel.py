@@ -32,11 +32,11 @@ async def async_setup_entry(
     hub_id = data["hub_id"]
 
     entities = [ConneeAlarmControlPanel(coordinator, api, hub_id)]
-    # v2.1.9: una entita' di sola lettura per ogni zona (gruppo) della centrale
+    # v2.2.0: una entita' per ogni zona (gruppo) della centrale, ora si inserisce e si disinserisce
     for g in (coordinator.data.get("groups") or []):
         gid = g.get("id") or g.get("groupId")
         if gid:
-            entities.append(ConneeAlarmGroupPanel(coordinator, hub_id, str(gid), g.get("groupName") or g.get("name") or f"Zona {gid}"))
+            entities.append(ConneeAlarmGroupPanel(coordinator, api, hub_id, str(gid), g.get("groupName") or g.get("name") or f"Zona {gid}"))
     async_add_entities(entities)
 
 
@@ -156,14 +156,16 @@ class ConneeAlarmControlPanel(CoordinatorEntity, AlarmControlPanelEntity):
 
 
 class ConneeAlarmGroupPanel(CoordinatorEntity, AlarmControlPanelEntity):
-    """Zona (gruppo) Ajax: solo lettura, inserita o disinserita."""
+    """Zona (gruppo) Ajax: inserita o disinserita, comandabile (v2.2.0)."""
 
     _attr_has_entity_name = False
-    _attr_supported_features = AlarmControlPanelEntityFeature(0)
+    _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
     _attr_code_arm_required = False
+    _attr_code_required = False
 
-    def __init__(self, coordinator, hub_id: str, group_id: str, name: str):
+    def __init__(self, coordinator, api, hub_id: str, group_id: str, name: str):
         super().__init__(coordinator)
+        self._api = api
         self._hub_id = hub_id
         self._group_id = group_id
         self._attr_unique_id = f"ajax_{hub_id}_group_{group_id}"
@@ -195,3 +197,21 @@ class ConneeAlarmGroupPanel(CoordinatorEntity, AlarmControlPanelEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {"group_id": self._group_id, "dati_zona": self._group}
+
+    @property
+    def code_format(self) -> str | None:
+        return None
+
+    async def async_alarm_arm_away(self, code: str | None = None) -> None:
+        """Inserisce la zona."""
+        success, error_msg = await self._api.arm_group(self._hub_id, self._group_id, "ARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax (zona {self._attr_name}): {error_msg}")
+        await self.coordinator.async_request_refresh()
+
+    async def async_alarm_disarm(self, code: str | None = None) -> None:
+        """Disinserisce la zona."""
+        success, error_msg = await self._api.arm_group(self._hub_id, self._group_id, "DISARM")
+        if not success:
+            raise HomeAssistantError(f"Errore Ajax (zona {self._attr_name}): {error_msg}")
+        await self.coordinator.async_request_refresh()
