@@ -477,6 +477,20 @@ class ConneeAlarmApiClient:
             return False, result.get("message", "Unknown error")
         return True, ""
 
+    async def arm_group(self, hub_id: str, group_id: str, arm_state: str) -> tuple[bool, str]:
+        """Inserisce/disinserisce una zona (gruppo) della centrale (chiamata diretta Ajax)."""
+        if not self.user_id:
+            return False, "User ID not set"
+        command = "DISARM" if str(arm_state).upper() in ("DISARM", "DISARMED") else "ARM"
+        result = await self._call_ajax_direct(
+            f"/user/{self.user_id}/hubs/{hub_id}/groups/{group_id}/commands/arming",
+            "PUT",
+            {"command": command, "ignoreProblems": True},
+        )
+        if isinstance(result, dict) and "error" in result:
+            return False, result.get("message", "Unknown error")
+        return True, ""
+
     async def control_valve(self, device_id: str, valve_state: str) -> bool:
         """Control WaterStop valve (direct Ajax call).
 
