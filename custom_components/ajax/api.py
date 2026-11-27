@@ -511,14 +511,21 @@ class ConneeAlarmApiClient:
             return False
         return True
 
-    async def control_switch(self, device_id: str, switch_state: bool) -> bool:
-        """Control Socket/Relay (direct Ajax call)."""
+    async def control_switch(self, device_id: str, switch_state: bool, device_type: str = "Socket") -> bool:
+        """Accende/spegne Socket, Relay, WallSwitch (chiamata diretta Ajax).
+
+        27/11/2026: stesso comando ufficiale della valvola WaterStop (provato il 3/11):
+        POST .../devices/{id}/command con {"command": "SWITCH_ON"|"SWITCH_OFF", "deviceType": <tipo>}.
+        Il vecchio PUT .../commands/switch rispondeva 404.
+        """
         if not self.user_id or not self.hub_id:
             return False
-        state_str = "ON" if switch_state else "OFF"
         result = await self._call_ajax_direct(
-            f"/user/{self.user_id}/hubs/{self.hub_id}/devices/{device_id}/commands/switch",
-            "PUT",
-            {"state": state_str},
+            f"/user/{self.user_id}/hubs/{self.hub_id}/devices/{device_id}/command",
+            "POST",
+            {"command": "SWITCH_ON" if switch_state else "SWITCH_OFF", "deviceType": device_type or "Socket"},
         )
-        return not (isinstance(result, dict) and "error" in result)
+        if isinstance(result, dict) and "error" in result:
+            _LOGGER.error("Switch control failed for %s (%s): %s", device_id, device_type, result)
+            return False
+        return True
