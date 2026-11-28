@@ -1,7 +1,7 @@
 """Constants for Connee Alarm integration."""
 DOMAIN = "ajax"
 MANUFACTURER = "Ajax Systems by Connee"
-VERSION = "2.2.1"  # v2.2.1: prese Socket/Relay/WallSwitch comandabili (/command SWITCH_ON/OFF)
+VERSION = "2.2.2"  # v2.2.2: LifeQuality/AirQ umidita e CO2. v2.2.1: prese Socket/Relay/WallSwitch comandabili (/command SWITCH_ON/OFF)
 
 # Config
 CONF_HUB_ID = "hub_id"

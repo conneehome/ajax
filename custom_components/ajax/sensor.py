@@ -3,7 +3,7 @@ import logging
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, CONCENTRATION_PARTS_PER_MILLION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -141,6 +141,12 @@ async def async_setup_entry(
         )
         if has_temp:
             entities.append(ConneeAlarmTemperatureSensor(coordinator, device))
+
+        # LifeQuality (AirQ): umidita e CO2 (v2.2.2)
+        if device_type == "LifeQuality" or any(k in state for k in HUMIDITY_KEYS):
+            entities.append(ConneeAlarmAirSensor(coordinator, device, "humidity"))
+        if device_type == "LifeQuality" or any(k in state for k in CO2_KEYS):
+            entities.append(ConneeAlarmAirSensor(coordinator, device, "co2"))
 
     async_add_entities(entities)
 
@@ -361,6 +367,63 @@ class ConneeAlarmBatterySensor(CoordinatorEntity, SensorEntity):
             },
         }
 
+
+
+HUMIDITY_KEYS = ("humidity", "hum", "relativeHumidity", "humidityLevel")
+CO2_KEYS = ("co2", "co2Level", "co2Ppm", "carbonDioxide", "carbonDioxideLevel", "co2Concentration")
+
+
+class ConneeAlarmAirSensor(CoordinatorEntity, SensorEntity):
+    """Umidita (%) e CO2 (ppm) dei sensori LifeQuality/AirQ."""
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ConneeAlarmDataCoordinator, device: dict, kind: str):
+        super().__init__(coordinator)
+        self._device = device
+        self._kind = kind
+        self._device_id = _get_device_id(device)
+        self._device_type = _get_device_type(device)
+        self._keys = HUMIDITY_KEYS if kind == "humidity" else CO2_KEYS
+        if kind == "humidity":
+            self._attr_name = "Umidita"
+            self._attr_device_class = SensorDeviceClass.HUMIDITY
+            self._attr_native_unit_of_measurement = PERCENTAGE
+        else:
+            self._attr_name = "CO2"
+            self._attr_device_class = SensorDeviceClass.CO2
+            self._attr_native_unit_of_measurement = CONCENTRATION_PARTS_PER_MILLION
+        display_name = get_display_name(device, self._device_type)
+        self._attr_unique_id = f"ajax_{self._device_id}_{kind}"
+        self._attr_manufacturer = MANUFACTURER
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, str(self._device_id))},
+            name=display_name,
+            manufacturer=MANUFACTURER,
+            model=self._device_type,
+        )
+
+    def _state(self) -> dict:
+        states = self.coordinator.data.get("device_states", {})
+        return states.get(self._device_id, {}) if isinstance(states, dict) else {}
+
+    @property
+    def native_value(self) -> float | None:
+        state = self._state()
+        for k in self._keys:
+            v = state.get(k)
+            if v is not None:
+                try:
+                    return round(float(v), 1) if self._kind == "humidity" else int(round(float(v)))
+                except (ValueError, TypeError):
+                    return None
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        # chiavi dei dati ricevuti dal sensore: serve a controllare cosa espone davvero
+        return {"device_type": self._device_type, "connee_id": self._device_id, "chiavi_dati": sorted(self._state().keys())}
 
 
 class ConneeAlarmTemperatureSensor(CoordinatorEntity, SensorEntity):
