@@ -1,15 +1,18 @@
-"""Switch entities for Connee Alarm (Socket, WallSwitch, Relay) - READ-ONLY.
+"""Switch entities for Connee Alarm (Socket, WallSwitch, Relay).
 
-NOTE: The Ajax Enterprise API does NOT support switch control commands (returns 404).
-Socket/WallSwitch/Relay devices can only report their state, not be controlled remotely.
-These are implemented as SwitchEntity for UI consistency, but control methods log warnings.
+v2.2.1 (27/11/2026): le prese si comandano davvero, con lo stesso comando ufficiale delle valvole
+(POST .../devices/{id}/command SWITCH_ON/SWITCH_OFF). Prima erano in sola lettura e in HA
+sembravano un pulsante a impulso (ON e subito OFF).
 """
+import asyncio
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -60,12 +63,12 @@ async def async_setup_entry(
         if platform == "switch":
             entities.append(ConneeAlarmSwitch(coordinator, device, api))
 
-    _LOGGER.info("Setting up %d switch entities (read-only)", len(entities))
+    _LOGGER.info("Setting up %d switch entities", len(entities))
     async_add_entities(entities)
 
 
 class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
-    """Connee Alarm Socket/WallSwitch/Relay (READ-ONLY - Ajax API does not support control)."""
+    """Connee Alarm Socket/WallSwitch/Relay."""
 
     _attr_has_entity_name = False
     _attr_device_class = SwitchDeviceClass.OUTLET
@@ -77,6 +80,9 @@ class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
         self._device_id = device.get("id") or device.get("deviceId")
         self._device_type = _get_device_type(device)
         self._api = api
+        # stato atteso dopo un comando: vale finche' Ajax non lo conferma (max 30 s)
+        self._atteso: bool | None = None
+        self._atteso_t = 0.0
 
         display_name = _get_display_name(device, self._device_type)
 
@@ -89,42 +95,59 @@ class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
             model=self._device_type,
         )
 
+    def _stato_ajax(self) -> bool | None:
+        states = self.coordinator.data.get("device_states", {})
+        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
+        for key in ("switchState", "powerState", "relayState", "on", "state"):
+            val = state.get(key)
+            if val is None:
+                continue
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (list, tuple, set)):
+                # le prese Ajax mandano un elenco di flag: vuoto = spenta
+                flag = {str(x).upper() for x in val}
+                return bool(flag & {"SWITCHED_ON", "SWITCH_ON", "ON", "RELAY_ON"})
+            if isinstance(val, str):
+                v = val.upper()
+                if key == "state" and v in ("PASSIVE", "ACTIVE", "ONLINE", "OFFLINE"):
+                    continue  # stato del dispositivo, non della presa
+                return v in ("ON", "TRUE", "1", "ENABLED", "SWITCHED_ON")
+            if isinstance(val, (int, float)):
+                return val > 0
+        return None
+
     @property
     def is_on(self) -> bool | None:
         """Return true if switch is on."""
-        states = self.coordinator.data.get("device_states", {})
-        state = states.get(self._device_id, {}) if isinstance(states, dict) else {}
+        reale = self._stato_ajax()
+        if self._atteso is not None:
+            if reale == self._atteso or time.monotonic() - self._atteso_t > 30:
+                self._atteso = None
+            else:
+                return self._atteso
+        return reale
 
-        # Try various possible field names for switch state
-        for key in ("switchState", "state", "powerState", "relayState", "on"):
-            val = state.get(key)
-            if val is not None:
-                if isinstance(val, bool):
-                    return val
-                if isinstance(val, str):
-                    return val.upper() in ("ON", "TRUE", "1", "ENABLED")
-                if isinstance(val, (int, float)):
-                    return val > 0
+    async def _comando(self, acceso: bool) -> None:
+        ok = await self._api.control_switch(self._device_id, acceso, self._device_type)
+        if not ok:
+            raise HomeAssistantError(f"Comando presa {'ON' if acceso else 'OFF'} non riuscito")
+        self._atteso, self._atteso_t = acceso, time.monotonic()
+        self.async_write_ha_state()
+        self.hass.async_create_task(self._rileggi_stato())
 
-        return None
+    async def _rileggi_stato(self) -> None:
+        for attesa in (4, 8):
+            await asyncio.sleep(attesa)
+            await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the switch on - NOT SUPPORTED by Ajax API."""
-        _LOGGER.warning(
-            "Cannot turn on switch %s: Ajax Enterprise API does not support remote control. "
-            "This switch is read-only.",
-            self._device_id
-        )
-        # Do not call API - it will fail with 404
+        """Accendi la presa."""
+        await self._comando(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the switch off - NOT SUPPORTED by Ajax API."""
-        _LOGGER.warning(
-            "Cannot turn off switch %s: Ajax Enterprise API does not support remote control. "
-            "This switch is read-only.",
-            self._device_id
-        )
-        # Do not call API - it will fail with 404
+        """Spegni la presa."""
+        await self._comando(False)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -135,8 +158,6 @@ class ConneeAlarmSwitch(CoordinatorEntity, SwitchEntity):
         attrs = {
             "device_type": self._device_type,
             "connee_id": self._device_id,
-            "read_only": True,
-            "control_note": "Ajax API does not support remote switch control",
         }
 
         # Socket/Relay specific attributes
